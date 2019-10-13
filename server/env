@@ -1,0 +1,2 @@
+AIRTABLE_API_KEY=123455
+AIRTABLE_ENDPOINT_URL=https://api.airtable.com/v0/baseId/tableName?
