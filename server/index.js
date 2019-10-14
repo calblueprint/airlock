@@ -5,7 +5,28 @@ const httpProxy = require('http-proxy');
 const express = require('express');
 const bodyParser = require('body-parser');
 const bcrypt = require('bcrypt');
+const querystring = require('querystring');
 const JWT = require('./jwt');
+
+const {
+  AIRTABLE_API_KEY,
+  AIRTABLE_BASE_ID,
+  AIRTABLE_ENDPOINT_URL,
+  AIRTABLE_API_VERSION,
+  AIRTABLE_USER_AGENT,
+  AIRTABLE_USER_TABLE,
+  HASH_PASSWORD,
+  SALT_ROUNDS
+} = process.env;
+
+const HEADERS = {
+  authorization: 'Bearer ' + AIRTABLE_API_KEY,
+  'x-api-version': AIRTABLE_API_VERSION,
+  'x-airtable-application-id': AIRTABLE_BASE_ID,
+  'User-Agent': AIRTABLE_USER_AGENT
+};
+
+const USERNAME_CREATE_URL = `${AIRTABLE_ENDPOINT_URL}/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_USER_TABLE}?`;
 
 const app = express();
 
@@ -15,32 +36,15 @@ const proxy = httpProxy.createProxyServer({
 });
 
 proxy.on('proxyReq', function(proxyReq, req, res, options) {
-  proxyReq.setHeader('authorization', `Bearer ${process.env.AIRTABLE_API_KEY}`);
+  proxyReq.setHeader('authorization', `Bearer ${AIRTABLE_API_KEY}`);
 });
 
 app.use(bodyParser.json());
+app.use('/v0*', JWT.verifyToken);
 
-app.get('/v0*', JWT.verifyToken, (req, res) => {
+app.all('/v0*', (req, res) => {
   proxy.web(req, res, {
-    target: `${process.env.AIRTABLE_ENDPOINT_URL}`
-  });
-});
-
-app.post('/v0*', JWT.verifyToken, (req, res) => {
-  proxy.web(req, res, {
-    target: `${process.env.AIRTABLE_ENDPOINT_URL}`
-  });
-});
-
-app.put('/v0*', JWT.verifyToken, (req, res) => {
-  proxy.web(req, res, {
-    target: `${process.env.AIRTABLE_ENDPOINT_URL}`
-  });
-});
-
-app.delete('/v0*', JWT.verifyToken, (req, res) => {
-  proxy.web(req, res, {
-    target: `${process.env.AIRTABLE_ENDPOINT_URL}`
+    target: `${AIRTABLE_ENDPOINT_URL}`
   });
 });
 
@@ -48,30 +52,23 @@ app.post('/register', (req, res) => {
   const username = req.body.username;
   const password = req.body.password;
 
-  const url = `${process.env.AIRTABLE_ENDPOINT_URL}/v0/${process.env.AIRTABLE_BASE_ID}/${process.env.AIRTABLE_USER_TABLE}?fields%5B%5D=username&filterByFormula=username%3D%22${username}%22`;
-  const headers = {
-    authorization: 'Bearer ' + process.env.AIRTABLE_API_KEY,
-    'x-api-version': process.env.AIRTABLE_API_VERSION,
-    'x-airtable-application-id': process.env.AIRTABLE_BASE_ID,
-    'User-Agent': process.env.AIRTABLE_USER_AGENT
-  };
+  const url = `${AIRTABLE_ENDPOINT_URL}/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_USER_TABLE}?fields%5B%5D=username&filterByFormula=username%3D%22${username}%22`;
   const options = {
     method: 'GET',
     url: url,
     json: true,
     timeout: 5000,
-    headers: headers,
+    headers: HEADERS,
     agentOptions: {
       rejectUnauthorized: false
     }
   };
-  const urlCreate = `${process.env.AIRTABLE_ENDPOINT_URL}/v0/${process.env.AIRTABLE_BASE_ID}/${process.env.AIRTABLE_USER_TABLE}?`;
   var optionsCreate = {
     method: 'POST',
-    url: urlCreate,
+    url: USERNAME_CREATE_URL,
     json: true,
     timeout: 5000,
-    headers: headers,
+    headers: HEADERS,
     agentOptions: {
       rejectUnauthorized: false
     },
@@ -91,20 +88,21 @@ app.post('/register', (req, res) => {
       res.status(422).send(payload);
       res.send(payload);
     } else {
-      if (JSON.parse(process.env.HASH_PASSWORD) === true) {
+      if (JSON.parse(HASH_PASSWORD) === true) {
         bcrypt.hash(
           req.body.password.trim(),
-          parseInt(process.env.SALT_ROUNDS, 10),
+          parseInt(SALT_ROUNDS, 10),
           (err, hash) => {
             optionsCreate.body.fields.password = hash;
             request(optionsCreate, function(error, resp, body) {
+              const user = body;
               if (error) {
                 res.send(error);
               }
-              if (body) {
-                delete body.fields.password;
-                const token = JWT.createToken(body);
-                const payload = { success: true, token: token, user: body };
+              if (user) {
+                delete user.fields.password;
+                const token = JWT.createToken(user);
+                const payload = { success: true, token: token, user: user };
                 res.status(200).json(payload);
               } else {
                 const payload = { success: false };
@@ -132,31 +130,33 @@ app.post('/register', (req, res) => {
   });
 });
 
-//TODO: Option to Hash
 app.post('/login', (req, res) => {
   const username = req.body.username;
   const password = req.body.password;
 
-  const url = `${process.env.AIRTABLE_ENDPOINT_URL}/v0/${process.env.AIRTABLE_BASE_ID}/${process.env.AIRTABLE_USER_TABLE}?filterByFormula=AND(username%3D%22${username}%22%2Cpassword%3D%22${password}%22)`;
-  const urlHash = `${process.env.AIRTABLE_ENDPOINT_URL}/v0/${process.env.AIRTABLE_BASE_ID}/${process.env.AIRTABLE_USER_TABLE}?filterByFormula=username%3D%22${username}%22`;
-  const headers = {
-    authorization: 'Bearer ' + process.env.AIRTABLE_API_KEY,
-    'x-api-version': process.env.AIRTABLE_API_VERSION,
-    'x-airtable-application-id': process.env.AIRTABLE_BASE_ID,
-    'User-Agent': process.env.AIRTABLE_USER_AGENT
-  };
+  const url = `${AIRTABLE_ENDPOINT_URL}/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_USER_TABLE}/?${querystring.stringify(
+    {
+      filterByFormula: `AND(username="${username}",password="${password}")`
+    }
+  )}`;
+  const urlHash = `${AIRTABLE_ENDPOINT_URL}/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_USER_TABLE}/?${querystring.stringify(
+    {
+      filterByFormula: `username="${username}"`
+    }
+  )}`;
+
   var options = {
     method: 'GET',
     url: url,
     json: true,
     timeout: 5000,
-    headers: headers,
+    headers: HEADERS,
     agentOptions: {
       rejectUnauthorized: false
     }
   };
 
-  if (JSON.parse(process.env.HASH_PASSWORD) === true) {
+  if (JSON.parse(HASH_PASSWORD) === true) {
     options.url = urlHash;
   }
 
@@ -165,17 +165,18 @@ app.post('/login', (req, res) => {
       res.send(error);
     }
     if (body.records.length > 0) {
-      if (JSON.parse(process.env.HASH_PASSWORD) === true) {
+      const [user] = body.records;
+      if (JSON.parse(HASH_PASSWORD) === true) {
         bcrypt
-          .compare(req.body.password.trim(), body.records[0].fields.password)
+          .compare(req.body.password.trim(), user.fields.password)
           .then(result => {
             if (result) {
-              delete body.records[0].fields.password;
-              const token = JWT.createToken(body.records[0]);
+              delete user.fields.password;
+              const token = JWT.createToken(user);
               const payload = {
                 success: true,
                 token: token,
-                user: body.records[0]
+                user: user
               };
               res.status(200).json(payload);
             } else {
@@ -184,9 +185,10 @@ app.post('/login', (req, res) => {
             }
           });
       } else {
-        delete body.recods[0].fields.password;
-        const token = JWT.createToken(body.records[0]);
-        const payload = { success: true, token: token, user: body.records[0] };
+        const [user] = body.records;
+        delete user.fields.password;
+        const token = JWT.createToken(user);
+        const payload = { success: true, token: token, user: user };
         res.status(200).json(payload);
       }
     } else {
