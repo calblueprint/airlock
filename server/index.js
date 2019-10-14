@@ -4,6 +4,7 @@ const http = require('http');
 const httpProxy = require('http-proxy');
 const express = require('express');
 const bodyParser = require('body-parser');
+const bcrypt = require('bcrypt');
 const JWT = require('./jwt');
 
 const app = express();
@@ -43,9 +44,6 @@ app.delete('/v0*', JWT.verifyToken, (req, res) => {
   });
 });
 
-/**
- * TODO: Option to Hash
- */
 app.post('/register', (req, res) => {
   const username = req.body.username;
   const password = req.body.password;
@@ -68,7 +66,7 @@ app.post('/register', (req, res) => {
     }
   };
   const urlCreate = `${process.env.AIRTABLE_ENDPOINT_URL}/v0/${process.env.AIRTABLE_BASE_ID}/${process.env.AIRTABLE_USER_TABLE}?`;
-  const optionsCreate = {
+  var optionsCreate = {
     method: 'POST',
     url: urlCreate,
     json: true,
@@ -93,19 +91,43 @@ app.post('/register', (req, res) => {
       res.status(422).send(payload);
       res.send(payload);
     } else {
-      request(optionsCreate, function(error, resp, body) {
-        if (error) {
-          res.send(error);
-        }
-        if (body) {
-          const token = JWT.createToken(body);
-          const payload = { success: true, token: token, user: body };
-          res.status(200).json(payload);
-        } else {
-          const payload = { success: false };
-          res.status(422).send(payload);
-        }
-      });
+      if (JSON.parse(process.env.HASH_PASSWORD) === true) {
+        bcrypt.hash(
+          req.body.password.trim(),
+          parseInt(process.env.SALT_ROUNDS, 10),
+          (err, hash) => {
+            optionsCreate.body.fields.password = hash;
+            request(optionsCreate, function(error, resp, body) {
+              if (error) {
+                res.send(error);
+              }
+              if (body) {
+                delete body.fields.password;
+                const token = JWT.createToken(body);
+                const payload = { success: true, token: token, user: body };
+                res.status(200).json(payload);
+              } else {
+                const payload = { success: false };
+                res.status(422).send(payload);
+              }
+            });
+          }
+        );
+      } else {
+        request(optionsCreate, function(error, resp, body) {
+          if (error) {
+            res.send(error);
+          }
+          if (body) {
+            const token = JWT.createToken(body);
+            const payload = { success: true, token: token, user: body };
+            res.status(200).json(payload);
+          } else {
+            const payload = { success: false };
+            res.status(422).send(payload);
+          }
+        });
+      }
     }
   });
 });
@@ -115,7 +137,8 @@ app.post('/login', (req, res) => {
   const username = req.body.username;
   const password = req.body.password;
 
-  const url = `${process.env.AIRTABLE_ENDPOINT_URL}/v0/${process.env.AIRTABLE_BASE_ID}/${process.env.AIRTABLE_USER_TABLE}?fields%5B%5D=username&filterByFormula=AND(username%3D%22${username}%22%2Cpassword%3D%22${password}%22)`;
+  const url = `${process.env.AIRTABLE_ENDPOINT_URL}/v0/${process.env.AIRTABLE_BASE_ID}/${process.env.AIRTABLE_USER_TABLE}?filterByFormula=AND(username%3D%22${username}%22%2Cpassword%3D%22${password}%22)`;
+  const urlHash = `${process.env.AIRTABLE_ENDPOINT_URL}/v0/${process.env.AIRTABLE_BASE_ID}/${process.env.AIRTABLE_USER_TABLE}?filterByFormula=username%3D%22${username}%22`;
   const headers = {
     authorization: 'Bearer ' + process.env.AIRTABLE_API_KEY,
     'x-api-version': process.env.AIRTABLE_API_VERSION,
@@ -132,14 +155,40 @@ app.post('/login', (req, res) => {
       rejectUnauthorized: false
     }
   };
+
+  if (JSON.parse(process.env.HASH_PASSWORD) === true) {
+    options.url = urlHash;
+  }
+
   request(options, function(error, resp, body) {
     if (error) {
       res.send(error);
     }
     if (body.records.length > 0) {
-      const token = JWT.createToken(body.records[0]);
-      const payload = { success: true, token: token, user: body.records[0] };
-      res.status(200).json(payload);
+      if (JSON.parse(process.env.HASH_PASSWORD) === true) {
+        bcrypt
+          .compare(req.body.password.trim(), body.records[0].fields.password)
+          .then(result => {
+            if (result) {
+              delete body.records[0].fields.password;
+              const token = JWT.createToken(body.records[0]);
+              const payload = {
+                success: true,
+                token: token,
+                user: body.records[0]
+              };
+              res.status(200).json(payload);
+            } else {
+              const payload = { success: false, error: 'Invalid login' };
+              res.status(422).send(payload);
+            }
+          });
+      } else {
+        delete body.recods[0].fields.password;
+        const token = JWT.createToken(body.records[0]);
+        const payload = { success: true, token: token, user: body.records[0] };
+        res.status(200).json(payload);
+      }
     } else {
       const payload = { success: false, error: 'user not found' };
       res.status(422).send(payload);
