@@ -111,5 +111,8 @@
         "space-unary-ops": "warn",
         "spaced-comment": "warn",
         "yoda": "warn"
+    },
+    "parserOptions": {
+        "ecmaVersion": 2017
     }
 }

@@ -39,6 +39,24 @@ proxy.on('proxyReq', function(proxyReq, req, res, options) {
   proxyReq.setHeader('authorization', `Bearer ${AIRTABLE_API_KEY}`);
 });
 
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', 'http://localhost:3000');
+  res.header(
+    'Access-Control-Allow-Headers',
+    [
+      'Origin',
+      'X-Requested-With',
+      'Content-Type',
+      'Accept',
+      'authorization',
+      'x-airtable-application-id',
+      'x-api-version',
+      'x-airtable-user-agent'
+    ].join(', ')
+  );
+  next();
+});
+
 app.use(bodyParser.json());
 app.use('/v0*', JWT.verifyToken);
 
@@ -48,7 +66,7 @@ app.all('/v0*', (req, res) => {
   });
 });
 
-app.post('/register', (req, res) => {
+app.post('/:version/:base/register', (req, res) => {
   const username = req.body.username;
   const password = req.body.password;
 
@@ -81,7 +99,7 @@ app.post('/register', (req, res) => {
   };
   request(options, async function(error, resp, body) {
     if (error) {
-      res.send(error);
+      return res.send(error);
     }
     if (body.records.length > 0) {
       const payload = { success: false, message: 'user exists' };
@@ -195,6 +213,30 @@ app.post('/login', (req, res) => {
       const payload = { success: false, error: 'user not found' };
       res.status(422).send(payload);
     }
+  });
+});
+
+app.get('/v0*', JWT.verifyToken, (req, res) => {
+  proxy.web(req, res, {
+    target: `${process.env.AIRTABLE_ENDPOINT_URL}`
+  });
+});
+
+app.post('/v0*', JWT.verifyToken, (req, res) => {
+  proxy.web(req, res, {
+    target: `${process.env.AIRTABLE_ENDPOINT_URL}`
+  });
+});
+
+app.put('/v0*', JWT.verifyToken, (req, res) => {
+  proxy.web(req, res, {
+    target: `${process.env.AIRTABLE_ENDPOINT_URL}`
+  });
+});
+
+app.delete('/v0*', JWT.verifyToken, (req, res) => {
+  proxy.web(req, res, {
+    target: `${process.env.AIRTABLE_ENDPOINT_URL}`
   });
 });
 
