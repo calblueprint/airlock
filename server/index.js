@@ -15,7 +15,7 @@ const {
   AIRTABLE_API_VERSION,
   AIRTABLE_USER_AGENT,
   AIRTABLE_USER_TABLE,
-  HASH_PASSWORD,
+  DISABLE_HASH_PASSWORD,
   SALT_ROUNDS
 } = process.env;
 
@@ -24,6 +24,15 @@ const HEADERS = {
   'x-api-version': AIRTABLE_API_VERSION,
   'x-airtable-application-id': AIRTABLE_BASE_ID,
   'User-Agent': AIRTABLE_USER_AGENT
+};
+
+const REQUEST_OPTIONS = {
+  json: true,
+  timeout: 5000,
+  headers: HEADERS,
+  agentOptions: {
+    rejectUnauthorized: false
+  }
 };
 
 const USERNAME_CREATE_URL = `${AIRTABLE_ENDPOINT_URL}/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_USER_TABLE}?`;
@@ -40,9 +49,8 @@ proxy.on('proxyReq', function(proxyReq, req, res, options) {
 });
 
 app.use(bodyParser.json());
-app.use('/v0*', JWT.verifyToken);
 
-app.all('/v0*', (req, res) => {
+app.all('/v0*', JWT.verifyToken, (req, res) => {
   proxy.web(req, res, {
     target: `${AIRTABLE_ENDPOINT_URL}`
   });
@@ -51,27 +59,17 @@ app.all('/v0*', (req, res) => {
 app.post('/register', (req, res) => {
   const username = req.body.username;
   const password = req.body.password;
-
-  const url = `${AIRTABLE_ENDPOINT_URL}/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_USER_TABLE}?fields%5B%5D=username&filterByFormula=username%3D%22${username}%22`;
-  const options = {
-    method: 'GET',
-    url: url,
-    json: true,
-    timeout: 5000,
-    headers: HEADERS,
-    agentOptions: {
-      rejectUnauthorized: false
-    }
+  const url = {
+    url: `${AIRTABLE_ENDPOINT_URL}/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_USER_TABLE}?fields%5B%5D=username&${querystring.stringify(
+      {
+        filterByFormula: `username="${username}"`
+      }
+    )}`
   };
-  var optionsCreate = {
-    method: 'POST',
-    url: USERNAME_CREATE_URL,
-    json: true,
-    timeout: 5000,
-    headers: HEADERS,
-    agentOptions: {
-      rejectUnauthorized: false
-    },
+  const urlCreate = {
+    url: USERNAME_CREATE_URL
+  };
+  var requestPayload = {
     body: {
       fields: {
         username: `${username}`,
@@ -79,53 +77,46 @@ app.post('/register', (req, res) => {
       }
     }
   };
-  request(options, async function(error, resp, body) {
+
+  request({ ...REQUEST_OPTIONS, ...url, method: 'GET' }, async function(
+    error,
+    resp,
+    body
+  ) {
+    const [user] = body.records;
     if (error) {
-      res.send(error);
+      return res.status(400).send(error);
     }
-    if (body.records.length > 0) {
+    if (user) {
       const payload = { success: false, message: 'user exists' };
-      res.status(422).send(payload);
-      res.send(payload);
+      return res.status(422).send(payload);
     } else {
-      if (JSON.parse(HASH_PASSWORD) === true) {
-        bcrypt.hash(
-          req.body.password.trim(),
-          parseInt(SALT_ROUNDS, 10),
-          (err, hash) => {
-            optionsCreate.body.fields.password = hash;
-            request(optionsCreate, function(error, resp, body) {
-              const user = body;
-              if (error) {
-                res.send(error);
-              }
-              if (user) {
-                delete user.fields.password;
-                const token = JWT.createToken(user);
-                const payload = { success: true, token: token, user: user };
-                res.status(200).json(payload);
-              } else {
-                const payload = { success: false };
-                res.status(422).send(payload);
-              }
-            });
-          }
-        );
-      } else {
-        request(optionsCreate, function(error, resp, body) {
+      const hash = await bcrypt.hash(
+        req.body.password,
+        parseInt(SALT_ROUNDS, 10)
+      );
+      if (!JSON.parse(DISABLE_HASH_PASSWORD)) {
+        requestPayload.body.fields.password = hash;
+      }
+      request(
+        { ...REQUEST_OPTIONS, ...urlCreate, ...requestPayload, method: 'POST' },
+        function(error, resp, body) {
+          const user = body;
           if (error) {
-            res.send(error);
+            return res.send(error);
           }
-          if (body) {
-            const token = JWT.createToken(body);
-            const payload = { success: true, token: token, user: body };
-            res.status(200).json(payload);
+          if (user) {
+            //TODO createSafeToken
+            delete user.fields.password;
+            const token = JWT.createToken(user);
+            const payload = { success: true, token: token, user: user };
+            return res.status(200).json(payload);
           } else {
             const payload = { success: false };
-            res.status(422).send(payload);
+            return res.status(422).send(payload);
           }
-        });
-      }
+        }
+      );
     }
   });
 });
@@ -134,73 +125,68 @@ app.post('/login', (req, res) => {
   const username = req.body.username;
   const password = req.body.password;
 
-  const url = `${AIRTABLE_ENDPOINT_URL}/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_USER_TABLE}/?${querystring.stringify(
-    {
-      filterByFormula: `AND(username="${username}",password="${password}")`
-    }
-  )}`;
-  const urlHash = `${AIRTABLE_ENDPOINT_URL}/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_USER_TABLE}/?${querystring.stringify(
-    {
-      filterByFormula: `username="${username}"`
-    }
-  )}`;
-
-  var options = {
-    method: 'GET',
-    url: url,
-    json: true,
-    timeout: 5000,
-    headers: HEADERS,
-    agentOptions: {
-      rejectUnauthorized: false
-    }
+  const url = {
+    url: `${AIRTABLE_ENDPOINT_URL}/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_USER_TABLE}/?${querystring.stringify(
+      {
+        filterByFormula: `AND(username="${username}",password="${password}")`
+      }
+    )}`
+  };
+  const urlHash = {
+    url: `${AIRTABLE_ENDPOINT_URL}/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_USER_TABLE}/?${querystring.stringify(
+      {
+        filterByFormula: `username="${username}"`
+      }
+    )}`
   };
 
-  if (JSON.parse(HASH_PASSWORD) === true) {
-    options.url = urlHash;
-  }
+  const requestURL = !JSON.parse(DISABLE_HASH_PASSWORD) ? urlHash : url;
 
-  request(options, function(error, resp, body) {
+  request({ ...REQUEST_OPTIONS, ...requestURL, method: 'GET' }, async function(
+    error,
+    resp,
+    body
+  ) {
+    const [user] = body.records;
     if (error) {
-      res.send(error);
+      return res.send(error);
     }
-    if (body.records.length > 0) {
+    if (user) {
       const [user] = body.records;
-      if (JSON.parse(HASH_PASSWORD) === true) {
-        bcrypt
-          .compare(req.body.password.trim(), user.fields.password)
-          .then(result => {
-            if (result) {
-              delete user.fields.password;
-              const token = JWT.createToken(user);
-              const payload = {
-                success: true,
-                token: token,
-                user: user
-              };
-              res.status(200).json(payload);
-            } else {
-              const payload = { success: false, error: 'Invalid login' };
-              res.status(422).send(payload);
-            }
-          });
+      if (!JSON.parse(DISABLE_HASH_PASSWORD)) {
+        const match = await bcrypt.compare(
+          req.body.password,
+          user.fields.password
+        );
+        if (match) {
+          delete user.fields.password;
+          const token = JWT.createToken(user);
+          const payload = {
+            success: true,
+            token: token,
+            user: user
+          };
+          return res.status(200).json(payload);
+        } else {
+          const payload = { success: false, error: 'Invalid login' };
+          return res.status(422).send(payload);
+        }
       } else {
-        const [user] = body.records;
         delete user.fields.password;
         const token = JWT.createToken(user);
         const payload = { success: true, token: token, user: user };
-        res.status(200).json(payload);
+        return res.status(200).json(payload);
       }
     } else {
       const payload = { success: false, error: 'user not found' };
-      res.status(422).send(payload);
+      return res.status(422).send(payload);
     }
   });
 });
 
 app.use((err, req, res, next) => {
   console.log(err);
-  res.status(422).send({ error: err.message });
+  return res.status(422).send({ error: err.message });
 });
 
 const server = http.createServer(app);
