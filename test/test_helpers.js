@@ -13,6 +13,17 @@ function getMockEnvironmentAsync() {
 
     app.use(bodyParser.json());
 
+    function sendAuthorizedResponse(req, res) {
+        res.json({
+            user: {
+                username: req.body.username
+            },
+            token: 'tokXyz'
+        });
+    }
+    app.post('/v0/:baseId/login', sendAuthorizedResponse);
+    app.post('/v0/:baseId/register', sendAuthorizedResponse);
+
     app.post('/v0/:baseId/:tableIdOrName', _checkParamsMiddleware, function(req, res) {
         var isCreatingJustOneRecord = !!req.body.fields;
         var recordsInBody = isCreatingJustOneRecord ? [req.body] : req.body.records;
@@ -57,17 +68,6 @@ function getMockEnvironmentAsync() {
             });
         },
     ];
-
-    function sendAuthorizedResponse(req, res) {
-        res.json({
-            user: {
-                username: req.body.username
-            },
-            token: 'tokXyz'
-        });
-    }
-    app.post('/v0/:baseId/:login', sendAuthorizedResponse);
-    app.post('/v0/:baseId/:register', sendAuthorizedResponse);
 
     app.patch('/v0/:baseId/:tableIdOrName/:recordId', singleRecordUpdate);
     app.put('/v0/:baseId/:tableIdOrName/:recordId', singleRecordUpdate);
