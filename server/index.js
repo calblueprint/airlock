@@ -5,8 +5,10 @@ const httpProxy = require('http-proxy');
 const express = require('express');
 const bodyParser = require('body-parser');
 const bcrypt = require('bcrypt');
-const querystring = require('querystring');
-const JWT = require('./jwt');
+const isEmpty = require('lodash/isEmpty');
+const objectToQueryParamString = require('./lib/object_to_query_param_string');
+const QUERY = require('./lib/query');
+const JWT = require('./lib/jwt');
 
 const {
   AIRTABLE_API_KEY,
@@ -14,7 +16,6 @@ const {
   AIRTABLE_ENDPOINT_URL,
   AIRTABLE_API_VERSION,
   AIRTABLE_USER_AGENT,
-  AIRTABLE_USER_TABLE,
   DISABLE_HASH_PASSWORD,
   SALT_ROUNDS
 } = process.env;
@@ -35,8 +36,6 @@ const REQUEST_OPTIONS = {
   }
 };
 
-const USERNAME_CREATE_URL = `${AIRTABLE_ENDPOINT_URL}/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_USER_TABLE}?`;
-
 const app = express();
 
 const proxy = httpProxy.createProxyServer({
@@ -56,19 +55,18 @@ app.all('/v0*', JWT.verifyToken, (req, res) => {
   });
 });
 
-app.post('/register', (req, res) => {
+app.post('/register', async (req, res) => {
   const username = req.body.username;
   const password = req.body.password;
-  const url = {
-    url: `${AIRTABLE_ENDPOINT_URL}/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_USER_TABLE}?fields%5B%5D=username&${querystring.stringify(
-      {
-        filterByFormula: `username="${username}"`
-      }
-    )}`
-  };
-  const urlCreate = {
-    url: USERNAME_CREATE_URL
-  };
+
+  const urlCreate = QUERY.CREATE_URL_STRING();
+  const queryUserUrl = QUERY.CREATE_URL_STRING(
+    objectToQueryParamString({
+      fields: ['username'],
+      filterByFormula: `username="${username}"`
+    })
+  );
+
   var requestPayload = {
     body: {
       fields: {
@@ -78,69 +76,63 @@ app.post('/register', (req, res) => {
     }
   };
 
-  request({ ...REQUEST_OPTIONS, ...url, method: 'GET' }, async function(
-    error,
-    resp,
-    body
-  ) {
-    const [user] = body.records;
-    if (error) {
-      return res.status(400).send(error);
-    }
-    if (user) {
-      const payload = { success: false, message: 'user exists' };
-      return res.status(422).send(payload);
-    } else {
-      const hash = await bcrypt.hash(
-        req.body.password,
-        parseInt(SALT_ROUNDS, 10)
-      );
-      if (!JSON.parse(DISABLE_HASH_PASSWORD)) {
-        requestPayload.body.fields.password = hash;
+  request(
+    { ...REQUEST_OPTIONS, ...queryUserUrl, method: 'GET' },
+    async function(error, resp, body) {
+      const [user] = body.records;
+      if (error) {
+        return res.status(400).send(error);
       }
-      request(
-        { ...REQUEST_OPTIONS, ...urlCreate, ...requestPayload, method: 'POST' },
-        function(error, resp, body) {
-          const user = body;
-          if (error) {
-            return res.send(error);
-          }
-          if (user) {
-            const token = JWT.createToken(user);
-            const payload = { success: true, token: token, user: user };
-            return res.status(200).json(payload);
-          } else {
-            const payload = { success: false };
-            return res.status(422).send(payload);
-          }
+      if (!isEmpty(user)) {
+        const payload = { success: false, message: 'user exists' };
+        return res.status(422).send(payload);
+      } else {
+        const hash = await bcrypt.hash(
+          req.body.password,
+          parseInt(SALT_ROUNDS, 10)
+        );
+        if (!JSON.parse(DISABLE_HASH_PASSWORD)) {
+          requestPayload.body.fields.password = hash;
         }
-      );
+        request(
+          {
+            ...REQUEST_OPTIONS,
+            ...urlCreate,
+            ...requestPayload,
+            method: 'POST'
+          },
+          function(error, resp, body) {
+            const user = body;
+            if (error) {
+              return res.send(error);
+            }
+            if (!isEmpty(user)) {
+              const token = JWT.createToken(user);
+              const payload = { success: true, token: token, user: user };
+              return res.status(200).json(payload);
+            } else {
+              const payload = { success: false };
+              return res.status(422).send(payload);
+            }
+          }
+        );
+      }
     }
-  });
+  );
 });
 
 app.post('/login', (req, res) => {
   const username = req.body.username;
   const password = req.body.password;
-
-  const url = {
-    url: `${AIRTABLE_ENDPOINT_URL}/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_USER_TABLE}/?${querystring.stringify(
-      {
-        filterByFormula: `AND(username="${username}",password="${password}")`
-      }
-    )}`
-  };
-  const urlHash = {
-    url: `${AIRTABLE_ENDPOINT_URL}/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_USER_TABLE}/?${querystring.stringify(
-      {
+  const queryParams = !JSON.parse(DISABLE_HASH_PASSWORD)
+    ? {
         filterByFormula: `username="${username}"`
       }
-    )}`
-  };
+    : { filterByFormula: `AND(username="${username}",password="${password}")` };
 
-  const requestURL = !JSON.parse(DISABLE_HASH_PASSWORD) ? urlHash : url;
+  const url = QUERY.CREATE_URL_STRING(objectToQueryParamString(queryParams));
 
-  request({ ...REQUEST_OPTIONS, ...requestURL, method: 'GET' }, async function(
+  request({ ...REQUEST_OPTIONS, ...url, method: 'GET' }, async function(
     error,
     resp,
     body
@@ -149,8 +141,7 @@ app.post('/login', (req, res) => {
     if (error) {
       return res.send(error);
     }
-    if (user) {
-      const [user] = body.records;
+    if (!isEmpty(user)) {
       if (!JSON.parse(DISABLE_HASH_PASSWORD)) {
         const match = await bcrypt.compare(
           req.body.password,
