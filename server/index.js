@@ -106,8 +106,6 @@ app.post('/register', (req, res) => {
             return res.send(error);
           }
           if (user) {
-            //TODO createSafeToken
-            delete user.fields.password;
             const token = JWT.createToken(user);
             const payload = { success: true, token: token, user: user };
             return res.status(200).json(payload);
@@ -159,7 +157,6 @@ app.post('/login', (req, res) => {
           user.fields.password
         );
         if (match) {
-          delete user.fields.password;
           const token = JWT.createToken(user);
           const payload = {
             success: true,
@@ -172,7 +169,6 @@ app.post('/login', (req, res) => {
           return res.status(422).send(payload);
         }
       } else {
-        delete user.fields.password;
         const token = JWT.createToken(user);
         const payload = { success: true, token: token, user: user };
         return res.status(200).json(payload);

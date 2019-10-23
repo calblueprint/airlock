@@ -2,10 +2,36 @@ const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
 
+// jsonwebtoken options
+// https://github.com/auth0/node-jsonwebtoken#jwtsignpayload-secretorprivatekey-options-callback
+const OPTIONS = {
+  algorithm: 'RS256',
+  expiresIn: '1d'
+};
+
+// fields to remove from payload
+XFIELDS = {
+  PASSWORD: 'password'
+};
+
 const createToken = payload => {
-  var PRIVATE_KEY = fs.readFileSync(path.join(__dirname, 'priv.pem'));
-  const token = jwt.sign(payload, PRIVATE_KEY, { algorithm: 'RS256' });
+  let safePayload = createSafePayload(payload);
+  const PRIVATE_KEY = fs.readFileSync(path.join(__dirname, 'priv.pem'));
+  const token = jwt.sign(safePayload, PRIVATE_KEY, { ...OPTIONS });
   return token;
+};
+
+const createSafePayload = payload => {
+  let fields = payload.fields;
+  if (fields) {
+    Object.keys(XFIELDS).forEach(key => {
+      let value = XFIELDS[key];
+      if (fields.hasOwnProperty(value)) {
+        delete fields[`${value}`];
+      }
+    });
+  }
+  return payload;
 };
 
 //middleware
