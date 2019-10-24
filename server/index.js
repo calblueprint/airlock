@@ -1,14 +1,15 @@
 require('dotenv').config();
-const request = require('request');
+const util = require('util');
+const request = util.promisify(require('request'));
 const http = require('http');
 const httpProxy = require('http-proxy');
 const express = require('express');
 const bodyParser = require('body-parser');
 const bcrypt = require('bcrypt');
 const isEmpty = require('lodash/isEmpty');
-const objectToQueryParamString = require('./lib/object_to_query_param_string');
-const QUERY = require('./lib/query');
-const JWT = require('./lib/jwt');
+const AirtableRoute = require('./utils/AirtableRoute');
+const JWT = require('./config/jwt');
+const { checkForExistingUser } = require('./middleware/checkForExistingUser');
 
 const {
   AIRTABLE_API_KEY,
@@ -49,125 +50,92 @@ proxy.on('proxyReq', function(proxyReq, req, res, options) {
 
 app.use(bodyParser.json());
 
+app.post(
+  '/:version/:base/__I__WROTE__90__PERCENT__OF__THE__CODE__REGISTER',
+  checkForExistingUser,
+  async (req, res, next) => {
+    if (!isEmpty(req.user)) {
+      const payload = { success: false, message: 'user exists' };
+      return res.status(422).send(payload);
+    }
+
+    const urlCreate = AirtableRoute.users();
+    const hash = await bcrypt.hash(
+      req.body.password,
+      parseInt(SALT_ROUNDS, 10)
+    );
+    let newUser;
+    try {
+      ({ body: newUser } = await request({
+        ...REQUEST_OPTIONS,
+        ...urlCreate,
+        ...{
+          body: {
+            fields: {
+              username: `${req.body.username}`,
+              password: `${
+                !JSON.parse(DISABLE_HASH_PASSWORD) ? hash : password
+              }`
+            }
+          }
+        },
+        method: 'POST'
+      }));
+    } catch (err) {
+      next(err);
+    }
+
+    if (!isEmpty(newUser)) {
+      const token = JWT.createToken(newUser);
+      const payload = { success: true, token: token, user: newUser };
+      return res.status(200).json(payload);
+    }
+    const payload = { success: false };
+    return res.status(422).send(payload);
+  }
+);
+
+app.post(
+  '/:version/:base/__YOU__FELL__ASLEEP__LOGIN',
+  checkForExistingUser,
+  async (req, res) => {
+    if (isEmpty(req.user)) {
+      const payload = { success: false, message: 'user does not exists' };
+      return res.status(422).send(payload);
+    }
+    const password = req.body.password;
+    if (!JSON.parse(DISABLE_HASH_PASSWORD)) {
+      const match = await bcrypt.compare(password, req.user.fields.password);
+      if (match) {
+        const token = JWT.createToken(req.user);
+        const payload = {
+          success: true,
+          token: token,
+          user: req.user
+        };
+        return res.status(200).json(payload);
+      }
+      const payload = { success: false, error: 'Invalid login' };
+      return res.status(422).send(payload);
+    }
+    const match = req.user.fields.password === password;
+    if (match) {
+      const token = JWT.createToken(req.user);
+      const payload = {
+        success: true,
+        token: token,
+        user: req.user
+      };
+      return res.status(200).json(payload);
+    }
+    const payload = { success: false, error: 'Invalid login' };
+    return res.status(422).send(payload);
+  }
+);
+
 app.all('/v0*', JWT.verifyToken, (req, res) => {
   proxy.web(req, res, {
     target: `${AIRTABLE_ENDPOINT_URL}`
-  });
-});
-
-app.post('/register', async (req, res) => {
-  const username = req.body.username;
-  const password = req.body.password;
-
-  const urlCreate = QUERY.CREATE_URL_STRING();
-  const queryUserUrl = QUERY.CREATE_URL_STRING(
-    objectToQueryParamString({
-      fields: ['username'],
-      filterByFormula: `username="${username}"`
-    })
-  );
-
-  var requestPayload = {
-    body: {
-      fields: {
-        username: `${username}`,
-        password: `${password}`
-      }
-    }
-  };
-
-  request(
-    { ...REQUEST_OPTIONS, ...queryUserUrl, method: 'GET' },
-    async function(error, resp, body) {
-      const [user] = body.records;
-      if (error) {
-        return res.status(400).send(error);
-      }
-      if (!isEmpty(user)) {
-        const payload = { success: false, message: 'user exists' };
-        return res.status(422).send(payload);
-      } else {
-        const hash = await bcrypt.hash(
-          req.body.password,
-          parseInt(SALT_ROUNDS, 10)
-        );
-        if (!JSON.parse(DISABLE_HASH_PASSWORD)) {
-          requestPayload.body.fields.password = hash;
-        }
-        request(
-          {
-            ...REQUEST_OPTIONS,
-            ...urlCreate,
-            ...requestPayload,
-            method: 'POST'
-          },
-          function(error, resp, body) {
-            const user = body;
-            if (error) {
-              return res.send(error);
-            }
-            if (!isEmpty(user)) {
-              const token = JWT.createToken(user);
-              const payload = { success: true, token: token, user: user };
-              return res.status(200).json(payload);
-            } else {
-              const payload = { success: false };
-              return res.status(422).send(payload);
-            }
-          }
-        );
-      }
-    }
-  );
-});
-
-app.post('/login', (req, res) => {
-  const username = req.body.username;
-  const password = req.body.password;
-  const queryParams = !JSON.parse(DISABLE_HASH_PASSWORD)
-    ? {
-        filterByFormula: `username="${username}"`
-      }
-    : { filterByFormula: `AND(username="${username}",password="${password}")` };
-
-  const url = QUERY.CREATE_URL_STRING(objectToQueryParamString(queryParams));
-
-  request({ ...REQUEST_OPTIONS, ...url, method: 'GET' }, async function(
-    error,
-    resp,
-    body
-  ) {
-    const [user] = body.records;
-    if (error) {
-      return res.send(error);
-    }
-    if (!isEmpty(user)) {
-      if (!JSON.parse(DISABLE_HASH_PASSWORD)) {
-        const match = await bcrypt.compare(
-          req.body.password,
-          user.fields.password
-        );
-        if (match) {
-          const token = JWT.createToken(user);
-          const payload = {
-            success: true,
-            token: token,
-            user: user
-          };
-          return res.status(200).json(payload);
-        } else {
-          const payload = { success: false, error: 'Invalid login' };
-          return res.status(422).send(payload);
-        }
-      } else {
-        const token = JWT.createToken(user);
-        const payload = { success: true, token: token, user: user };
-        return res.status(200).json(payload);
-      }
-    } else {
-      const payload = { success: false, error: 'user not found' };
-      return res.status(422).send(payload);
-    }
   });
 });
 

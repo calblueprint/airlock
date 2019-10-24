@@ -1,4 +1,5 @@
 require('dotenv').config();
+const querystring = require('querystring');
 const isEmpty = require('lodash/isEmpty');
 
 const {
@@ -7,10 +8,12 @@ const {
   AIRTABLE_USER_TABLE
 } = process.env;
 
-const CREATE_URL_STRING = (queryParams = {}) => {
+users = (queryParams = {}) => {
   if (!isEmpty(queryParams)) {
     const urlQuery = {
-      url: `${AIRTABLE_ENDPOINT_URL}/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_USER_TABLE}?${queryParams}`
+      url: `${AIRTABLE_ENDPOINT_URL}/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_USER_TABLE}?${querystring.stringify(
+        queryParams
+      )}`
     };
     return urlQuery;
   }
@@ -20,5 +23,5 @@ const CREATE_URL_STRING = (queryParams = {}) => {
 };
 
 module.exports = {
-  CREATE_URL_STRING: CREATE_URL_STRING
+  users: users
 };
