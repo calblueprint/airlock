@@ -40,7 +40,8 @@ describe('Base', function() {
             // Correctly configured Airlock client
             const airtable = new Airtable({
                 apiKey: 'airlock',
-                endpointUrl: 'test'
+                endpointUrl: 'test',
+                requestTimeout: 1234
             });
             let base = airtable.base('app123');
 
@@ -64,14 +65,14 @@ describe('Base', function() {
             });
             it('makes authentication requests with the right options', async function() {
                 base = airtable.base('app123');
-                await base[authFunction]({
+                base[authFunction]({
                     username: 'user',
                     password: 'password'
                 });
                 expect(request).toHaveBeenCalledTimes(1);
                 expect(request).toHaveBeenCalledWith({
                     method: 'POST',
-                    url: `https://airlock-service-test.now.sh/${authFunction}`,
+                    url: `test/v0/app123/${authFunction}?`,
                     json: true,
                     headers: {
                         authorization: 'Bearer airlock',
@@ -81,11 +82,16 @@ describe('Base', function() {
                     },
                     agentOptions: {
                         rejectUnauthorized: false
-                    }
+                    },
+                    body: {
+                        username: 'user',
+                        password: 'password'
+                    },
+                    timeout: 1234
                 }, expect.any(Function));
             });
             it('stores the resulting user and token within the Airtable client', async function() {
-                await base[authFunction]({
+                base[authFunction]({
                     username: 'user',
                     password: 'password'
                 });
