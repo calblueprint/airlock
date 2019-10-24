@@ -1,37 +1,22 @@
 'use strict';
-
+var request = require('request');
 var version = require('../package.json').version;
 var Airtable = require('../lib/airtable');
-var testHelpers = require('./test_helpers');
 
-var mockRequest = jest.fn((options) => ({
+jest.mock('request', () => jest.fn((options) => options.body && ({
     user: {
         username: options.body.username,
     },
     token: 'tokXyz'
-}));
-
-jest.mock('request', () => {
-    return {
-        __esModule: true,
-        default: mockRequest,
-    };
-});
+})));
 
 describe('Base', function() {
     ['login', 'register'].forEach((authFunction) => {
         describe(`#${authFunction}`, function() {
-            let airtable;
-            let teardownAsync;
-            beforeAll(function() {
-                return testHelpers.getMockEnvironmentAsync().then(function(env) {
-                    airtable = env.airtable;
-                    teardownAsync = env.teardownAsync;
-                });
-            });
             afterAll(function() {
-                return teardownAsync();
+                jest.clearAllMocks();
             });
+
             it('disallows requests to the official API endpoint', async function() {
                 let fakeAirtable = new Airtable({
                     apiKey: 'keyXyz'
@@ -53,11 +38,11 @@ describe('Base', function() {
             });
 
             // Correctly configured Airlock client
-            const airlockAirtable = new Airtable({
+            const airtable = new Airtable({
                 apiKey: 'airlock',
-                endpointUrl: 'https://airlock-service-test.now.sh'
+                endpointUrl: 'test'
             });
-            let base = airlockAirtable.base('app123');
+            let base = airtable.base('app123');
 
             it('requires username and password', async function() {
                 expect.assertions(2);
@@ -83,8 +68,8 @@ describe('Base', function() {
                     username: 'user',
                     password: 'password'
                 });
-                expect(mockRequest).toHaveBeenCalledTimes(1);
-                expect(mockRequest).toHaveBeenCalledWith({
+                expect(request).toHaveBeenCalledTimes(1);
+                expect(request).toHaveBeenCalledWith({
                     method: 'POST',
                     url: `https://airlock-service-test.now.sh/${authFunction}`,
                     json: true,
@@ -105,14 +90,13 @@ describe('Base', function() {
                     password: 'password'
                 });
                 expect(base.user).not.toBe(null);
-                expect(base.user.Username).toBe('user');
+                expect(base.user.username).toBe('user');
                 expect(base._token).toBe('tokXyz');
             });
         });
     });
 
     describe('#runAction', function() {
-        var request = jest.fn();
         it('makes requests with the right options', function() {
             var fakeAirtable = new Airtable({
                 apiKey: 'keyXyz',
