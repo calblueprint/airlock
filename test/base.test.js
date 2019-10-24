@@ -3,12 +3,14 @@ var request = require('request');
 var version = require('../package.json').version;
 var Airtable = require('../lib/airtable');
 
-jest.mock('request', () => jest.fn((options) => options.body && ({
-    user: {
-        username: options.body.username,
-    },
-    token: 'tokXyz'
-})));
+jest.mock('request', () => jest.fn((options, cb) => {
+    cb(null, {
+        user: {
+            username: options.body && options.body.username
+        },
+        token: 'tokXyz'
+    });
+}));
 
 describe('Base', function() {
     ['login', 'register'].forEach((authFunction) => {
@@ -90,14 +92,16 @@ describe('Base', function() {
                     timeout: 1234
                 }, expect.any(Function));
             });
-            it('stores the resulting user and token within the Airtable client', async function() {
-                base[authFunction]({
+            it('stores the resulting user and token within the Airtable client', function() {
+                expect.assertions(3);
+                return base[authFunction]({
                     username: 'user',
                     password: 'password'
+                }).then((response) => {
+                    expect(base.user).not.toBe(null);
+                    expect(base.user.username).toBe('user');
+                    expect(base._token).toBe('tokXyz');
                 });
-                expect(base.user).not.toBe(null);
-                expect(base.user.username).toBe('user');
-                expect(base._token).toBe('tokXyz');
             });
         });
     });
