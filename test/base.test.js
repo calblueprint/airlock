@@ -97,10 +97,10 @@ describe('Base', function() {
                 return base[authFunction]({
                     username: 'user',
                     password: 'password'
-                }).then((response) => {
-                    expect(base.user).not.toBe(null);
-                    expect(base.user.username).toBe('user');
-                    expect(base._token).toBe('tokXyz');
+                }).then(() => {
+                    expect(base.getUser()).not.toBe(null);
+                    expect(base.getUsername()).toBe('user');
+                    expect(base.getToken()).toBe('tokXyz');
                 });
             });
         });
