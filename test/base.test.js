@@ -12,6 +12,22 @@ jest.mock('request', () => jest.fn((options, cb) => {
     });
 }));
 
+class LocalStorageMock {
+    constructor() {
+        this.store = {};
+    }
+
+    getItem(key) {
+        return this.store[key] || null;
+    }
+
+    setItem(key, value) {
+        this.store[key] = value.toString();
+    }
+}
+
+global.localStorage = new LocalStorageMock();
+
 describe('Base', function() {
     ['login', 'register'].forEach((authFunction) => {
         describe(`#${authFunction}`, function() {
@@ -24,7 +40,6 @@ describe('Base', function() {
                     apiKey: 'keyXyz'
                 });
                 const base = fakeAirtable.base('app123');
-
                 expect.assertions(2);
                 expect(fakeAirtable._endpointUrl).toBe('https://api.airtable.com');
     
@@ -67,6 +82,7 @@ describe('Base', function() {
             });
             it('makes authentication requests with the right options', async function() {
                 base = airtable.base('app123');
+
                 base[authFunction]({
                     username: 'user',
                     password: 'password'
