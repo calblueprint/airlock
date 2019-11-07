@@ -71,6 +71,7 @@ module.exports = {
       return res.status(422).send(payload);
     }
 
+    const fields = req.body.fields ? req.body.fields : {};
     const urlCreate = AirtableRoute.users();
     const hash = await bcrypt.hash(
       req.body.password,
@@ -87,7 +88,8 @@ module.exports = {
               username: `${req.body.username}`,
               password: `${
                 !JSON.parse(DISABLE_HASH_PASSWORD) ? hash : password
-              }`
+              }`,
+              ...fields
             }
           }
         },

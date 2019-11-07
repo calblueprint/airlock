@@ -7,7 +7,8 @@ const {
   AIRTABLE_API_KEY,
   AIRTABLE_BASE_ID,
   AIRTABLE_API_VERSION,
-  AIRTABLE_USER_AGENT
+  AIRTABLE_USER_AGENT,
+  AIRTABLE_USERNAME_COLUMN_NAME
 } = process.env;
 
 const HEADERS = {
@@ -32,7 +33,7 @@ const checkForExistingUser = async (req, res, next) => {
   }
   const username = req.body.username;
   const queryUserUrl = AirtableRoute.users({
-    filterByFormula: `username="${username}"`
+    filterByFormula: `${AIRTABLE_USERNAME_COLUMN_NAME}="${username}"`
   });
 
   try {
