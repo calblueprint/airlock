@@ -8,7 +8,7 @@
   "scripts": {
     "pretest": "npm run lint",
     "lint": "eslint .",
-    "test": "jest --env node"
+    "test": "jest --env jsdom"
   },
   "dependencies": {
     "lodash": "4.17.14",

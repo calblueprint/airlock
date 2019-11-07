@@ -96,7 +96,7 @@ describe('Base', function() {
                         authorization: 'Bearer airlock',
                         'x-api-version': '0.1.0',
                         'x-airtable-application-id': 'app123',
-                        'User-Agent': 'Airtable.js/' + version
+                        'x-airtable-user-agent': 'Airtable.js/' + version
                     },
                     agentOptions: {
                         rejectUnauthorized: false
@@ -142,7 +142,7 @@ describe('Base', function() {
                     authorization: 'Bearer keyXyz',
                     'x-api-version': '0.1.0',
                     'x-airtable-application-id': 'app123',
-                    'User-Agent': 'Airtable.js/' + version
+                    'x-airtable-user-agent': 'Airtable.js/' + version
                 },
                 agentOptions: {
                     rejectUnauthorized: false
