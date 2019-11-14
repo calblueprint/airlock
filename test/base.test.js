@@ -12,29 +12,29 @@ jest.mock('request', () => jest.fn((options, cb) => {
     });
 }));
 
-class LocalStorageMock {
-    constructor() {
-        this.store = {};
-    }
+// class LocalStorageMock {
+//     constructor() {
+//         this.store = {};
+//     }
 
-    getItem(key) {
-        return this.store[key] || null;
-    }
+//     getItem(key) {
+//         return this.store[key] || null;
+//     }
 
-    setItem(key, value) {
-        this.store[key] = value.toString();
-    }
-}
+//     setItem(key, value) {
+//         this.store[key] = value.toString();
+//     }
+// }
 
-global.localStorage = new LocalStorageMock();
+// global.localStorage = new LocalStorageMock();
 
 describe('Base', function() {
+    afterEach(function() {
+        localStorage.clear();
+        jest.clearAllMocks();
+    });
     ['login', 'register'].forEach((authFunction) => {
         describe(`#${authFunction}`, function() {
-            afterAll(function() {
-                jest.clearAllMocks();
-            });
-
             it('disallows requests to the official API endpoint', async function() {
                 let fakeAirtable = new Airtable({
                     apiKey: 'keyXyz'
@@ -108,16 +108,34 @@ describe('Base', function() {
                     timeout: 1234
                 }, expect.any(Function));
             });
-            it('stores the resulting user and token within the Airtable client', function() {
-                expect.assertions(3);
-                return base[authFunction]({
-                    username: 'user',
-                    password: 'password'
-                }).then(() => {
-                    expect(base.getUser()).not.toBe(null);
-                    expect(base.getUsername()).toBe('user');
-                    expect(base.getToken()).toBe('tokXyz');
-                });
+        });
+    });
+
+    describe('#login+logout', function() {
+        const airtable = new Airtable({
+            apiKey: 'airlock',
+            endpointUrl: 'test',
+            requestTimeout: 1234
+        });
+        let base = airtable.base('app123');
+        it('stores the resulting user and token within the Airtable client', function() {
+            expect.assertions(3);
+            return base.login({
+                username: 'user',
+                password: 'password'
+            }).then(() => {
+                expect(base.getUser()).not.toBe(null);
+                expect(base.getUsername()).toBe('user');
+                expect(base.getToken()).toBe('tokXyz');
+            });
+        });
+
+        it('properly logs out a user by deleting user properties in localStorage', function() {
+            base.logout();
+            return new Promise(() => {
+                expect(base.getUser()).toBe(null);
+                expect(base.getUsername()).toBe(null);
+                expect(base.getToken()).toBe(null);
             });
         });
     });
