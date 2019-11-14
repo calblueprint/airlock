@@ -6,12 +6,12 @@ const path = require('path');
 // https://github.com/auth0/node-jsonwebtoken#jwtsignpayload-secretorprivatekey-options-callback
 const OPTIONS = {
   algorithm: 'RS256',
-  expiresIn: '1d'
+  expiresIn: '1d',
 };
 
 // fields to remove from payload
-XFIELDS = {
-  PASSWORD: 'password'
+const XFIELDS = {
+  PASSWORD: 'password',
 };
 
 const createToken = payload => {
@@ -43,7 +43,7 @@ const verifyToken = async (req, res, next) => {
       if (err) {
         return res.json({
           success: false,
-          message: 'Token is not valid'
+          message: 'Token is not valid',
         });
       } else {
         next();
@@ -52,12 +52,12 @@ const verifyToken = async (req, res, next) => {
   } else {
     return res.json({
       success: false,
-      message: 'Authorization token is not supplied'
+      message: 'Authorization token is not supplied',
     });
   }
 };
 
 module.exports = {
   createToken: createToken,
-  verifyToken: verifyToken
+  verifyToken: verifyToken,
 };
