@@ -11,8 +11,8 @@ const {
   AIRTABLE_BASE_ID,
   AIRTABLE_API_VERSION,
   AIRTABLE_USER_AGENT,
-  DISABLE_HASH_PASSWORD,
-  SALT_ROUNDS
+  DISABLE_HASH_PASSWORD = false,
+  SALT_ROUNDS = 5
 } = process.env;
 
 const HEADERS = {
@@ -65,6 +65,7 @@ module.exports = {
     const payload = { success: false, error: 'Invalid login' };
     return res.status(422).send(payload);
   },
+
   async register(req, res, next) {
     if (!isEmpty(req.user)) {
       const payload = { success: false, message: 'user exists' };
@@ -79,7 +80,9 @@ module.exports = {
     );
     let newUser;
     try {
-      ({ body: newUser } = await request({
+      ({
+        body: { error = null, ...newUser }
+      } = await request({
         ...REQUEST_OPTIONS,
         ...urlCreate,
         ...{
@@ -87,7 +90,7 @@ module.exports = {
             fields: {
               username: `${req.body.username}`,
               password: `${
-                !JSON.parse(DISABLE_HASH_PASSWORD) ? hash : password
+                !JSON.parse(DISABLE_HASH_PASSWORD) ? hash : req.body.password
               }`,
               ...fields
             }
@@ -95,8 +98,11 @@ module.exports = {
         },
         method: 'POST'
       }));
+      if (error) {
+        throw error;
+      }
     } catch (err) {
-      next(err);
+      return next(err);
     }
 
     if (!isEmpty(newUser)) {
