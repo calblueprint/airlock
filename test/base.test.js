@@ -131,11 +131,11 @@ describe('Base', function() {
         });
 
         it('properly logs out a user by deleting user properties in localStorage', function() {
-            base.logout();
-            return new Promise(() => {
+            expect.assertions(3);
+            return base.logout().then(() => {
                 expect(base.getUser()).toBe(null);
-                expect(base.getUsername()).toBe(null);
-                expect(base.getToken()).toBe(null);
+                expect(base.getUsername()).not.toBe('user');
+                expect(base.getToken()).not.toBe('tokXyz');
             });
         });
     });
