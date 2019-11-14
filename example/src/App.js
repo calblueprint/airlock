@@ -6,6 +6,7 @@ import "./App.css";
 function App() {
   const base = useContext(AirlockContext);
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
 
@@ -24,7 +25,10 @@ function App() {
     ev.preventDefault();
     const response = await base.register({
       username,
-      password
+      password,
+      fields: {
+        email
+      }
     });
     console.log(response);
   }
@@ -40,6 +44,14 @@ function App() {
             name="username"
             type="text"
             onChange={({ target: { value } }) => setUsername(value)}
+          />
+        </div>
+        <div>
+          <label htmlFor="email">Email</label>
+          <input
+            name="email"
+            type="text"
+            onChange={({ target: { value } }) => setEmail(value)}
           />
         </div>
         <div>
