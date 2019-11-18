@@ -1,18 +1,12 @@
 require('dotenv').config();
-zlib = require('zlib');
+const zlib = require('zlib');
 const httpProxy = require('http-proxy');
-const NodeCache = require('node-cache');
-const cache = new NodeCache({ stdTTL: 1 * 60 });
-const Bottleneck = require('bottleneck');
-const rateLimiter = new Bottleneck({
-  minTime: 1050 / 5,
-});
-
-parseUrl = req => {
-  return req.originalUrl;
-};
+const cache = require('../utils/cache');
+const { rateLimiter } = require('../utils/rateLimit');
 
 const { AIRTABLE_API_KEY, AIRTABLE_ENDPOINT_URL } = process.env;
+const CONTENT_ENCODING = 'content-encoding';
+const GZIP = 'gzip';
 
 const proxy = httpProxy.createProxyServer({
   changeOrigin: true,
@@ -25,25 +19,23 @@ proxy.on('proxyReq', function(proxyReq, req, res, options) {
 });
 
 proxy.on('proxyRes', function(proxyRes, req, res) {
-  var dizzy;
+  let unzipPayload = null;
   proxyRes.on('data', function(chunk) {
-    if (proxyRes.headers['content-encoding'] == 'gzip') {
+    if (proxyRes.headers[`${CONTENT_ENCODING}`] == `${GZIP}`) {
       zlib.gunzip(chunk, function(err, dezipped) {
-        dizzy = dezipped.toString();
-        const url = parseUrl(req);
-        cache.set(url, JSON.parse(dizzy));
-        res.send(JSON.parse(dizzy));
+        unzipPayload = dezipped.toString();
+        cache.set(req, JSON.parse(unzipPayload));
+        return res.send(JSON.parse(unzipPayload));
       });
     } else {
-      console.log('non gzip airtable data?');
+      throw new Error('non gzip data returned');
     }
   });
 });
 
 module.exports = {
   web(req, res) {
-    const url = parseUrl(req);
-    const content = cache.get(url);
+    const content = cache.get(req);
     if (content) {
       return res.status(200).send(content);
     }
