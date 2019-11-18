@@ -15,7 +15,18 @@ set = (req, data) => {
   cache.set(url, data);
 };
 
+clear = req => {
+  cache.keys((err, keys) => {
+    if (!err) {
+      let baseUrl = req.baseUrl;
+      const cacheKeys = keys.filter(k => k.includes(baseUrl));
+      cache.del(cacheKeys);
+    }
+  });
+};
+
 module.exports = {
   get: get,
   set: set,
+  clear: clear,
 };
