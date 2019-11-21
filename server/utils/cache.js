@@ -1,16 +1,16 @@
 const NodeCache = require('node-cache');
 const cache = new NodeCache({ stdTTL: 1 * 60 });
 
-parseUrl = req => {
+const parseUrl = req => {
   return req.originalUrl;
 };
 
-get = req => {
+const get = req => {
   const url = parseUrl(req);
   return cache.get(url);
 };
 
-set = (req, data) => {
+const set = (req, data) => {
   const url = parseUrl(req);
   cache.set(url, data);
 };
@@ -28,5 +28,5 @@ clear = req => {
 module.exports = {
   get: get,
   set: set,
-  clear: clear,
+  clear: clear
 };
