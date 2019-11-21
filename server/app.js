@@ -46,6 +46,12 @@ app.use((req, res, next) => {
   next();
 });
 
+app.all(
+  '/:version/:baseId/:tableIdOrName*',
+  JWT.verifyToken,
+  ProxyController.web
+);
+
 app.use(bodyParser.json());
 
 app.post(
@@ -58,12 +64,6 @@ app.post(
   '/:version/:base/__DANGEROUSLY__USE__TABLE__TO__LET__USERS__LOGIN',
   checkForExistingUser,
   AuthController.login
-);
-
-app.all(
-  '/:version/:baseId/:tableIdOrName*',
-  JWT.verifyToken,
-  ProxyController.web
 );
 
 app.use((err, req, res, next) => {
