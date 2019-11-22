@@ -1,28 +1,33 @@
 const NodeCache = require('node-cache');
-const cache = new NodeCache({ stdTTL: 1 * 60 });
+const CACHE_TTL_ONE_MINUTE = 1 * 60;
+const cache = new NodeCache({ stdTTL: CACHE_TTL_ONE_MINUTE });
 
-const parseUrl = req => {
+const createCacheKey = req => {
   return req.originalUrl;
 };
 
+const createClearKey = req => {
+  const cacheKey = [
+    req.params.version,
+    req.params.baseId,
+    req.params.tableIdOrName
+  ].join('/');
+  return cacheKey;
+};
+
 const get = req => {
-  const url = parseUrl(req);
+  const url = createCacheKey(req);
   return cache.get(url);
 };
 
 const set = (req, data) => {
-  const url = parseUrl(req);
+  const url = createCacheKey(req);
   cache.set(url, data);
 };
 
 const clear = req => {
-  cache.keys((err, keys) => {
-    if (!err) {
-      let baseUrl = req.baseUrl;
-      const cacheKeys = keys.filter(k => k.includes(baseUrl));
-      cache.del(cacheKeys);
-    }
-  });
+  let urlKey = createClearKey(req);
+  cache.del(cache.keys().filter(k => k.includes(urlKey)));
 };
 
 module.exports = {
