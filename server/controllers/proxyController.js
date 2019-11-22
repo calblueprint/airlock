@@ -18,15 +18,17 @@ proxy.on('proxyReq', function(proxyReq, req, res, options) {
 });
 
 proxy.on('proxyRes', function(proxyRes, req, res) {
+  let proxyPayload = null;
   proxyRes.on('data', function(chunk) {
     if (proxyRes.headers[`${CONTENT_ENCODING}`] == `${GZIP}`) {
       zlib.gunzip(chunk, function(err, dezipped) {
-        let unzipPayload = dezipped.toString();
-        cache.set(req, JSON.parse(unzipPayload));
-        return res.send(JSON.parse(unzipPayload));
+        proxyPayload = JSON.parse(dezipped.toString());
+        cache.set(req, proxyPayload);
+        res.status(proxyRes.statusCode).send(proxyPayload);
       });
     } else {
-      res.status(proxyRes.statusCode).send(JSON.parse(chunk.toString()));
+      proxyPayload = JSON.parse(chunk.toString());
+      res.status(proxyRes.statusCode).send(proxyPayload);
     }
   });
 });
