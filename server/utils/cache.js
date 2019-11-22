@@ -15,7 +15,7 @@ const set = (req, data) => {
   cache.set(url, data);
 };
 
-clear = req => {
+const clear = req => {
   cache.keys((err, keys) => {
     if (!err) {
       let baseUrl = req.baseUrl;
