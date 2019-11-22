@@ -6,6 +6,7 @@ const cache = require('../utils/cache');
 const { AIRTABLE_API_KEY, AIRTABLE_ENDPOINT_URL } = process.env;
 const CONTENT_ENCODING = 'content-encoding';
 const GZIP = 'gzip';
+const DEFLATE = 'deflate';
 
 const proxy = httpProxy.createProxyServer({
   changeOrigin: true,
@@ -16,24 +17,44 @@ const proxy = httpProxy.createProxyServer({
 proxy.on('proxyReq', function(proxyReq, req, res, options) {
   proxyReq.setHeader('authorization', `Bearer ${AIRTABLE_API_KEY}`);
 });
-
 proxy.on('proxyRes', function(proxyRes, req, res) {
-  let proxyPayload = null;
+  var body = [];
   proxyRes.on('data', function(chunk) {
+    body.push(chunk);
+  });
+  proxyRes.on('end', function() {
+    const buffer = Buffer.concat(body);
+    let proxyPayload = null;
+
     if (proxyRes.headers[`${CONTENT_ENCODING}`] == `${GZIP}`) {
-      zlib.gunzip(chunk, function(err, dezipped) {
-        proxyPayload = JSON.parse(dezipped.toString());
-        if (req.method === 'GET') {
-          cache.set(req, proxyPayload);
+      zlib.gunzip(buffer, function(err, decoded) {
+        if (!err) {
+          proxyPayload = JSON.parse(decoded.toString());
+          if (req.method === 'GET') {
+            cache.set(req, proxyPayload);
+          }
+          res.status(proxyRes.statusCode).send(proxyPayload);
+          res.end();
         }
-        res.status(proxyRes.statusCode).send(proxyPayload);
+      });
+    } else if (proxyRes.headers[`${CONTENT_ENCODING}`] == `${DEFLATE}`) {
+      zlib.inflate(buffer, function(err, decoded) {
+        if (!err) {
+          proxyPayload = JSON.parse(decoded.toString());
+          if (req.method === 'GET') {
+            cache.set(req, proxyPayload);
+          }
+          res.status(proxyRes.statusCode).send(proxyPayload);
+          res.end();
+        }
       });
     } else {
+      proxyPayload = JSON.parse(buffer.toString());
       if (req.method === 'GET') {
-        cache.set(req, JSON.parse(chunk.toString()));
+        cache.set(req, proxyPayload);
       }
-      proxyPayload = JSON.parse(chunk.toString());
       res.status(proxyRes.statusCode).send(proxyPayload);
+      res.end();
     }
   });
 });
