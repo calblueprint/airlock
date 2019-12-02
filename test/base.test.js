@@ -7,8 +7,10 @@ jest.mock('request', () => jest.fn((options, cb) => {
     cb(null, {
         body: {
             success: options.body && options.body.success,
-            username: options.body && options.body.username,
-            token: 'tokXyz'
+            user: {
+                username: options.body && options.body.username,
+            },
+            token: 'tokXyz',
         } 
     });
 }));
