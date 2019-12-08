@@ -12,6 +12,7 @@ const {
   AIRTABLE_API_VERSION,
   AIRTABLE_USER_AGENT,
   DISABLE_HASH_PASSWORD = false,
+  AIRTABLE_USERNAME_COLUMN_NAME,
   SALT_ROUNDS = 5
 } = process.env;
 
@@ -88,7 +89,7 @@ module.exports = {
         ...{
           body: {
             fields: {
-              username: `${req.body.username}`,
+              [AIRTABLE_USERNAME_COLUMN_NAME]: `${req.body.username}`,
               password: `${
                 !JSON.parse(DISABLE_HASH_PASSWORD) ? hash : req.body.password
               }`,

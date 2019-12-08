@@ -11,7 +11,16 @@ const JWT = require('./config/jwt');
 const { checkForExistingUser } = require('./middleware/checkForExistingUser');
 const port = process.env.PORT || 4000;
 
+const { PUBLIC_KEY, PRIVATE_KEY } = process.env;
+
 const CONFIG_ROOT = path.join(__dirname, 'config');
+
+if (PUBLIC_KEY) {
+  fs.writeFileSync(path.join(CONFIG_ROOT, 'pub.pem'));
+}
+if (PRIVATE_KEY) {
+  fs.writeFileSync(path.join(CONFIG_ROOT, 'priv.pem'));
+}
 if (
   !fs.existsSync(path.join(CONFIG_ROOT, 'priv.pem')) ||
   !fs.existsSync(path.join(CONFIG_ROOT, 'pub.pem'))
