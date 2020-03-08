@@ -7,7 +7,7 @@ const bodyParser = require('body-parser');
 
 const AuthController = require('./controllers/authController');
 const ProxyController = require('./controllers/proxyController');
-const JWT = require('./config/jwt');
+const JWT = require('./middleware/verifyToken');
 const { checkForExistingUser } = require('./middleware/checkForExistingUser');
 const port = process.env.PORT || 4000;
 
@@ -26,7 +26,7 @@ if (
   !fs.existsSync(path.join(CONFIG_ROOT, 'pub.pem'))
 ) {
   console.error(
-    `You must generate a public and private key in ${CONFIG_ROOT} to run Airlock!`
+    `You must generate a public and private key in ${CONFIG_ROOT} to run Airlock!`,
   );
   process.exit(1);
 }
@@ -46,8 +46,8 @@ app.use((req, res, next) => {
       'x-airtable-application-id',
       'x-api-version',
       'authorization',
-      'token'
-    ].join(', ')
+      'token',
+    ].join(', '),
   );
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
@@ -59,20 +59,20 @@ app.post(
   '/:version/:base/__DANGEROUSLY__USE__TABLE__TO__LET__USERS__REGISTER',
   bodyParser.json(),
   checkForExistingUser,
-  AuthController.register
+  AuthController.register,
 );
 
 app.post(
   '/:version/:base/__DANGEROUSLY__USE__TABLE__TO__LET__USERS__LOGIN',
   bodyParser.json(),
   checkForExistingUser,
-  AuthController.login
+  AuthController.login,
 );
 
 app.all(
   '/:version/:baseId/:tableIdOrName*',
   JWT.verifyToken,
-  ProxyController.web
+  ProxyController.web,
 );
 
 app.use((err, req, res, next) => {

@@ -11,7 +11,7 @@ const DEFLATE = 'deflate';
 const proxy = httpProxy.createProxyServer({
   changeOrigin: true,
   ignorePath: false,
-  selfHandleResponse: true
+  selfHandleResponse: true,
 });
 
 async function handlePayload(buffer, encoding) {
@@ -44,7 +44,7 @@ proxy.on('proxyRes', function(proxyRes, req, res) {
     const buffer = Buffer.concat(body);
     const proxyPayload = await handlePayload(
       buffer,
-      proxyRes.headers[`${CONTENT_ENCODING}`]
+      proxyRes.headers[`${CONTENT_ENCODING}`],
     );
     if (req.method === 'GET') {
       cache.set(req, proxyPayload);
@@ -62,13 +62,13 @@ module.exports = {
         return res.status(200).send(content);
       }
       proxy.web(req, res, {
-        target: `${AIRTABLE_ENDPOINT_URL}`
+        target: `${AIRTABLE_ENDPOINT_URL}`,
       });
     } else {
       cache.clear(req);
       proxy.web(req, res, {
-        target: `${AIRTABLE_ENDPOINT_URL}`
+        target: `${AIRTABLE_ENDPOINT_URL}`,
       });
     }
-  }
+  },
 };
