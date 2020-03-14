@@ -69,6 +69,13 @@ app.post(
   AuthController.login,
 );
 
+app.post(
+  '/:version/:base/__DANGEROUSLY__USE__TABLE__TO__LET__USERS__LOGOUT',
+  bodyParser.json(),
+  checkForExistingUser,
+  AuthController.logout,
+);
+
 app.all(
   '/:version/:baseId/:tableIdOrName*',
   JWT.verifyToken,

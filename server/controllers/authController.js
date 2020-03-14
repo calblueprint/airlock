@@ -114,4 +114,16 @@ module.exports = {
     const payload = { success: false };
     return res.status(422).send(payload);
   },
+  async logout(req, res, next) {
+    let token = req.headers['token'];
+    if (token) {
+      // check to see if we already invalidated token
+      // if not already invalidated -- store in invalid token cache/db
+    } else {
+      return res.json({
+        success: false,
+        message: 'Authorization token is not supplied',
+      });
+    }
+  },
 };
