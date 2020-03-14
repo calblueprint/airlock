@@ -1,5 +1,5 @@
 require('dotenv').config();
-const JWT = require('../config/jwt');
+const JWT = require('../lib/jwt');
 const util = require('util');
 const request = util.promisify(require('request'));
 const bcrypt = require('bcrypt');
@@ -12,14 +12,15 @@ const {
   AIRTABLE_API_VERSION,
   AIRTABLE_USER_AGENT,
   DISABLE_HASH_PASSWORD = false,
-  SALT_ROUNDS = 5
+  AIRTABLE_USERNAME_COLUMN_NAME,
+  SALT_ROUNDS = 5,
 } = process.env;
 
 const HEADERS = {
   authorization: 'Bearer ' + AIRTABLE_API_KEY,
   'x-api-version': AIRTABLE_API_VERSION,
   'x-airtable-application-id': AIRTABLE_BASE_ID,
-  'User-Agent': AIRTABLE_USER_AGENT
+  'User-Agent': AIRTABLE_USER_AGENT,
 };
 
 const REQUEST_OPTIONS = {
@@ -27,8 +28,8 @@ const REQUEST_OPTIONS = {
   timeout: 5000,
   headers: HEADERS,
   agentOptions: {
-    rejectUnauthorized: false
-  }
+    rejectUnauthorized: false,
+  },
 };
 
 module.exports = {
@@ -45,7 +46,7 @@ module.exports = {
         const payload = {
           success: true,
           token: token,
-          user: req.user
+          user: req.user,
         };
         return res.status(200).json(payload);
       }
@@ -58,7 +59,7 @@ module.exports = {
       const payload = {
         success: true,
         token: token,
-        user: req.user
+        user: req.user,
       };
       return res.status(200).json(payload);
     }
@@ -76,27 +77,27 @@ module.exports = {
     const urlCreate = AirtableRoute.users();
     const hash = await bcrypt.hash(
       req.body.password,
-      parseInt(SALT_ROUNDS, 10)
+      parseInt(SALT_ROUNDS, 10),
     );
     let newUser;
     try {
       ({
-        body: { error = null, ...newUser }
+        body: { error = null, ...newUser },
       } = await request({
         ...REQUEST_OPTIONS,
         ...urlCreate,
         ...{
           body: {
             fields: {
-              username: `${req.body.username}`,
+              [AIRTABLE_USERNAME_COLUMN_NAME]: `${req.body.username}`,
               password: `${
                 !JSON.parse(DISABLE_HASH_PASSWORD) ? hash : req.body.password
               }`,
-              ...fields
-            }
-          }
+              ...fields,
+            },
+          },
         },
-        method: 'POST'
+        method: 'POST',
       }));
       if (error) {
         throw error;
@@ -112,5 +113,5 @@ module.exports = {
     }
     const payload = { success: false };
     return res.status(422).send(payload);
-  }
+  },
 };
