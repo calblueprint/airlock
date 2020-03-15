@@ -5,6 +5,7 @@ const request = util.promisify(require('request'));
 const bcrypt = require('bcrypt');
 const isEmpty = require('lodash/isEmpty');
 const AirtableRoute = require('../utils/AirtableRoute');
+const { isTokenRevoked, revokeToken } = require('../utils/tokenManagement');
 
 const {
   AIRTABLE_API_KEY,
@@ -117,14 +118,15 @@ module.exports = {
   async logout(req, res, next) {
     let token = req.headers['token'];
     if (token) {
-      value = tokenStore.get(token);
+      value = isTokenRevoked(token);
       if (value != undefined) {
         return res.json({
           success: false,
           message: 'User has already been logged out',
         });
       } else {
-        tokenStore.set(token);
+        const revocationDate = new Date();
+        revokeToken(token, revocationDate.toString());
         return res.json({
           success: true,
           message: 'User successfully logged out',

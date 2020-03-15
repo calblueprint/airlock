@@ -1,8 +1,8 @@
-const { tokenStore } = require('../config/tokenStore');
+const { isTokenRevoked } = require('../utils/tokenManagement');
 const isTokenRevoked = (req, res, next) => {
   let token = req.headers['token'];
   if (token) {
-    value = tokenStore.get(token);
+    value = isTokenRevoked(token);
     if (value != undefined) {
       return res.json({
         success: false,
