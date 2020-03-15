@@ -5,7 +5,7 @@ const request = util.promisify(require('request'));
 const bcrypt = require('bcrypt');
 const isEmpty = require('lodash/isEmpty');
 const AirtableRoute = require('../utils/AirtableRoute');
-const { isTokenRevoked, revokeToken } = require('../utils/tokenManagement');
+const tokenManagement = require('../utils/tokenManagement');
 
 const {
   AIRTABLE_API_KEY,
@@ -34,7 +34,7 @@ const REQUEST_OPTIONS = {
 };
 
 module.exports = {
-  async login(req, res, next) {
+  async login(req, res) {
     if (isEmpty(req.user)) {
       const payload = { success: false, message: 'user does not exists' };
       return res.status(422).send(payload);
@@ -76,10 +76,7 @@ module.exports = {
 
     const fields = req.body.fields ? req.body.fields : {};
     const urlCreate = AirtableRoute.users();
-    const hash = await bcrypt.hash(
-      req.body.password,
-      parseInt(SALT_ROUNDS, 10),
-    );
+    const hash = await bcrypt.hash(req.body.password, parseInt(SALT_ROUNDS, 10));
     let newUser;
     try {
       ({
@@ -115,22 +112,29 @@ module.exports = {
     const payload = { success: false };
     return res.status(422).send(payload);
   },
-  async logout(req, res, next) {
+  async logout(req, res) {
     let token = req.headers['token'];
     if (token) {
-      value = isTokenRevoked(token);
-      if (value != undefined) {
+      value = await tokenManagement.isTokenRevoked(token);
+      if (value != null) {
         return res.json({
           success: false,
           message: 'User has already been logged out',
         });
       } else {
         const revocationDate = new Date();
-        revokeToken(token, revocationDate.toString());
-        return res.json({
-          success: true,
-          message: 'User successfully logged out',
-        });
+        let status = await tokenManagement.revokeToken(token, revocationDate.toString());
+        if (status == 'OK') {
+          return res.json({
+            success: true,
+            message: 'User successfully logged out',
+          });
+        } else {
+          return res.json({
+            success: false,
+            message: 'User unsuccessfully logged out',
+          });
+        }
       }
     } else {
       return res.json({

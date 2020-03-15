@@ -1,9 +1,9 @@
-const { isTokenRevoked } = require('../utils/tokenManagement');
-const isTokenRevoked = (req, res, next) => {
+const tokenManagement = require('../utils/tokenManagement');
+const checkTokenRevocation = async (req, res, next) => {
   let token = req.headers['token'];
   if (token) {
-    value = isTokenRevoked(token);
-    if (value != undefined) {
+    value = await tokenManagement.isTokenRevoked(token);
+    if (value != null) {
       return res.json({
         success: false,
         message: 'Token has been revoked',
@@ -20,5 +20,5 @@ const isTokenRevoked = (req, res, next) => {
 };
 
 module.exports = {
-  isTokenRevoked: isTokenRevoked,
+  checkTokenRevocation: checkTokenRevocation,
 };

@@ -9,7 +9,7 @@ const AuthController = require('./controllers/authController');
 const ProxyController = require('./controllers/proxyController');
 const JWT = require('./middleware/verifyToken');
 const { checkForExistingUser } = require('./middleware/checkForExistingUser');
-const { isTokenRevoked } = require('./middleware/isTokenRevoked');
+const { checkTokenRevocation } = require('./middleware/checkTokenRevocation');
 const port = process.env.PORT || 4000;
 
 const { PUBLIC_KEY, PRIVATE_KEY } = process.env;
@@ -73,14 +73,13 @@ app.post(
 app.post(
   '/:version/:base/__DANGEROUSLY__USE__TABLE__TO__LET__USERS__LOGOUT',
   bodyParser.json(),
-  checkForExistingUser,
   AuthController.logout,
 );
 
 app.all(
   '/:version/:baseId/:tableIdOrName*',
   JWT.verifyToken,
-  isTokenRevoked,
+  checkTokenRevocation,
   ProxyController.web,
 );
 

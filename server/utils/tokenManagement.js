@@ -1,21 +1,18 @@
-const { tokenStore } = require('../config/tokenStore');
+const tokenStore = require('../config/tokenStore');
 
-const isTokenRevoked = token => {
-  value = tokenStore.get(token);
-  return value;
+//returns value of token on success, null on failure
+const isTokenRevoked = async token => {
+  const res = await tokenStore.getAsync(token);
+  return res;
 };
 
-//this should be a utility function
-const revokeToken = (token, revocation_date) => {
-  tokenStore.set(token, revocation_date);
-};
-
-const clearRevokedTokens = () => {
-  tokenStore.flushAll();
+//returns string OK on success, null on fail
+const revokeToken = async (token, revocationDate) => {
+  const res = await tokenStore.setAsync(token, revocationDate);
+  return res;
 };
 
 module.exports = {
   isTokenRevoked: isTokenRevoked,
   revokeToken: revokeToken,
-  clearRevokedTokens: clearRevokedTokens,
 };
