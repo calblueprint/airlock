@@ -73,7 +73,7 @@ export default (
   };
 
   return {
-    login: async (req, res, next) => {
+    async login(req, res, next) {
       if (isEmpty(req.user)) {
         return next(
           new AuthorizationError('No token supplied or session expired'),
@@ -97,7 +97,7 @@ export default (
       sendToken(req, res, token);
     },
 
-    register: async (req, res, next) => {
+    async register(req, res, next) {
       if (!isEmpty(req.user)) {
         return res.json({ success: false, message: 'User exists' });
       }
@@ -146,7 +146,7 @@ export default (
       sendToken(req, res, token);
     },
 
-    checkForExistingUser: async (req, _res, next) => {
+    async checkForExistingUser(req, _res, next) {
       if (!req.body || !req.body.username) {
         return next();
       }
@@ -176,7 +176,7 @@ export default (
       }
     },
 
-    verifyToken: async (req, _res, next) => {
+    verifyToken(req, _res, next) {
       let token = req.headers.token as string;
       if (token) {
         jwt.verify(token, publicKey, (err, _decoded) => {

@@ -133,6 +133,7 @@ class Airlock {
   mountAirlock(): void {
     const app: express.Application = this.server;
     const authController = AuthController(this.options);
+    const proxyController = ProxyController(this.options);
 
     app.use((req, res, next) => {
       res.header('Access-Control-Allow-Origin', '*');
@@ -173,7 +174,7 @@ class Airlock {
     app.all(
       '/:version/:baseId/:tableIdOrName*',
       authController.verifyToken,
-      ProxyController.web,
+      proxyController.web,
     );
 
     app.use(
