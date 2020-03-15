@@ -20,7 +20,8 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "resolveJsonModule": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "typeRoots": ["./types", "./node_modules/@types"]
   },
   "exclude": ["*.*", "jest/*.*", "node_modules", "dist", "**/dist/*.*"]
 }

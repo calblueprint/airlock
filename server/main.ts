@@ -3,21 +3,23 @@ require('dotenv').config();
 import bodyParser from 'body-parser';
 import fs from 'fs';
 import express from 'express';
+import { ParamsDictionary } from 'express-serve-static-core';
 import http from 'http';
 import path from 'path';
 
 import AuthController from './controllers/authController';
 import ProxyController from './controllers/proxyController';
+import { AuthorizationError, InputError } from './lib/errors';
 import { checkForExistingUser } from './middleware/checkForExistingUser';
 import JWT from './middleware/verifyToken';
 import validators from './validators';
 
-type AirlockInitOptions = {
-  baseId: string;
+export type AirlockInitOptions = {
   server?: express.Application;
   port?: number;
   configDir?: string;
   resolversDir?: string;
+  disableHashPassword?: boolean;
   saltRounds?: number;
   airtableApiKey: string;
   airtableBaseId: string;
@@ -25,9 +27,14 @@ type AirlockInitOptions = {
   airtableUsernameColumn: string;
   airtablePasswordColumn: string;
 };
-type AirlockOptions = Required<Omit<AirlockInitOptions, 'server'>> & {
+export type AirlockOptions = Required<Omit<AirlockInitOptions, 'server'>> & {
   publicKey: string;
   privateKey: string;
+};
+export type AirlockController<
+  T extends { [actionName: string]: ParamsDictionary }
+> = {
+  [K in keyof T]: express.RequestHandler<T[K]>;
 };
 type AirlockOptionStatus = { valid: boolean; reasons?: any[] };
 
@@ -62,6 +69,7 @@ class Airlock {
       configDir: path.resolve(process.cwd(), 'config'),
       publicKey: '',
       privateKey: '',
+      disableHashPassword: false,
       saltRounds: 5,
       ...options,
     };
@@ -126,6 +134,8 @@ class Airlock {
 
   mountAirlock(): void {
     const app: express.Application = this.server;
+    const authController = AuthController(this.options);
+
     app.use((req, res, next) => {
       res.header('Access-Control-Allow-Origin', '*');
       res.header(
@@ -145,21 +155,21 @@ class Airlock {
       if (req.method === 'OPTIONS') {
         return res.sendStatus(200);
       }
-      next();
+      return next();
     });
 
     app.post(
       '/:version/:base/__DANGEROUSLY__USE__TABLE__TO__LET__USERS__REGISTER',
       bodyParser.json(),
       checkForExistingUser,
-      AuthController.register,
+      authController.register,
     );
 
     app.post(
       '/:version/:base/__DANGEROUSLY__USE__TABLE__TO__LET__USERS__LOGIN',
       bodyParser.json(),
       checkForExistingUser,
-      AuthController.login,
+      authController.login,
     );
 
     app.all(
@@ -175,8 +185,14 @@ class Airlock {
         res: express.Response,
         _next: express.NextFunction,
       ) => {
+        if (err instanceof InputError) {
+          return res.status(400).send({ success: false, error: err });
+        }
+        if (err instanceof AuthorizationError) {
+          return res.status(401).send({ success: false, error: err });
+        }
         console.error(err);
-        res.status(500).send({ error: err });
+        return res.status(500).send({ error: err });
       },
     );
   }
