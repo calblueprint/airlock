@@ -12,15 +12,21 @@ import { checkForExistingUser } from './middleware/checkForExistingUser';
 import JWT from './middleware/verifyToken';
 
 type AirlockInitOptions = {
-  publicKey: string;
-  privateKey: string;
   baseId: string;
   server?: express.Application;
   port?: number;
   configDir?: string;
   resolversDir?: string;
+  airtableApiKey: string;
+  airtableBaseId: string;
+  airtableTableName: string;
+  airtableUsernameColumn: string;
+  airtablePasswordColumn: string;
 };
-type AirlockOptions = Required<Omit<AirlockInitOptions, 'server'>>;
+type AirlockOptions = Required<Omit<AirlockInitOptions, 'server'>> & {
+  publicKey: string;
+  privateKey: string;
+};
 type AirlockOptionStatus = { valid: boolean; reasons?: any[] };
 
 class Airlock {
@@ -54,22 +60,6 @@ class Airlock {
   };
 
   constructor(opts: AirlockInitOptions) {
-    const { server, ...options } = opts;
-    this.options = {
-      port: Number(process.env.PORT) || 4000,
-      resolversDir: path.resolve(process.cwd(), 'resolvers'),
-      configDir: path.resolve(process.cwd(), 'config'),
-      ...options,
-    };
-    const status: AirlockOptionStatus = this.validateOptions();
-    if (!status.valid) {
-      console.error('Airlock could not start:');
-      status.reasons.forEach((reason: any) => {
-        console.error(`- ${reason}`);
-      });
-      process.exit(1);
-    }
-
     const { PUBLIC_KEY, PRIVATE_KEY } = process.env;
     if (PUBLIC_KEY) {
       fs.writeFileSync(
@@ -84,6 +74,26 @@ class Airlock {
       );
     }
 
+    const { server, ...options } = opts;
+    this.options = {
+      port: Number(process.env.PORT) || 4000,
+      resolversDir: path.resolve(process.cwd(), 'resolvers'),
+      configDir: path.resolve(process.cwd(), 'config'),
+      publicKey: '',
+      privateKey: '',
+      ...options,
+    };
+
+    const status: AirlockOptionStatus = this.validateOptions();
+    if (!status.valid) {
+      console.error('Airlock could not start:');
+      status.reasons.forEach((reason: any) => {
+        console.error(`- ${reason}`);
+      });
+      process.exit(1);
+    }
+
+    this.options = { ...this.options, ...this.readConfigFiles() };
     if (!server) {
       this.createServer();
     }
@@ -115,6 +125,15 @@ class Airlock {
       },
       { valid: true, reasons: [] },
     );
+  }
+
+  readConfigFiles(): { publicKey: string; privateKey: string } {
+    const publicKeyPath = path.resolve(this.options.configDir, 'pub.pem');
+    const privateKeyPath = path.resolve(this.options.configDir, 'priv.pem');
+    return {
+      publicKey: fs.readFileSync(publicKeyPath).toString(),
+      privateKey: fs.readFileSync(privateKeyPath).toString(),
+    };
   }
 
   createServer(): void {
