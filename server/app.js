@@ -9,6 +9,7 @@ const AuthController = require('./controllers/authController');
 const ProxyController = require('./controllers/proxyController');
 const JWT = require('./middleware/verifyToken');
 const { checkForExistingUser } = require('./middleware/checkForExistingUser');
+const { isTokenRevoked } = require('./middleware/isTokenRevoked');
 const port = process.env.PORT || 4000;
 
 const { PUBLIC_KEY, PRIVATE_KEY } = process.env;
@@ -79,6 +80,7 @@ app.post(
 app.all(
   '/:version/:baseId/:tableIdOrName*',
   JWT.verifyToken,
+  isTokenRevoked,
   ProxyController.web,
 );
 

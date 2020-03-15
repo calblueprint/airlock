@@ -117,8 +117,19 @@ module.exports = {
   async logout(req, res, next) {
     let token = req.headers['token'];
     if (token) {
-      // check to see if we already invalidated token
-      // if not already invalidated -- store in invalid token cache/db
+      value = tokenStore.get(token);
+      if (value != undefined) {
+        return res.json({
+          success: false,
+          message: 'User has already been logged out',
+        });
+      } else {
+        tokenStore.set(token);
+        return res.json({
+          success: true,
+          message: 'User successfully logged out',
+        });
+      }
     } else {
       return res.json({
         success: false,
