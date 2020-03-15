@@ -2,30 +2,26 @@ import { Record } from 'airtable';
 import bcrypt from 'bcrypt';
 import { Request, Response } from 'express';
 import isEmpty from 'lodash/isEmpty';
+import jwt from 'jsonwebtoken';
+import ms from 'ms';
 import util from 'util';
 
 import { AuthorizationError, InputError } from '../lib/errors';
-import JWT from '../lib/jwt';
 import { AirlockController, AirlockOptions } from '../main';
 import AirtableRoute from '../utils/AirtableRoute';
 
 const request = util.promisify(require('request'));
 
-function sendToken(req: Request, res: Response, token: string): void {
-  res.cookie('airlock_token', token, {
-    httpOnly: true,
-    domain: req.headers.host,
-  });
-  res.json({
-    success: true,
-    token: token,
-    user: req.user,
-  });
-}
+const TOKEN_EXPIRATION_TIME = '1d';
 
 export default (
   opts: AirlockOptions,
-): AirlockController<{ login: {}; register: {} }> => {
+): AirlockController<{
+  login: {};
+  register: {};
+  checkForExistingUser: {};
+  verifyToken: {};
+}> => {
   const {
     airtableApiKey,
     airtableBaseId,
@@ -34,7 +30,33 @@ export default (
     airtableUserTableName,
     disableHashPassword,
     saltRounds,
+    publicKey,
+    privateKey,
   } = opts;
+
+  function createToken(payload: Record<any>) {
+    return jwt.sign(
+      { ...payload, [airtablePasswordColumn]: undefined },
+      privateKey,
+      {
+        algorithm: 'RS256',
+        expiresIn: TOKEN_EXPIRATION_TIME,
+      },
+    );
+  }
+
+  function sendToken(req: Request, res: Response, token: string): void {
+    res.cookie('airlock_token', token, {
+      httpOnly: true,
+      domain: req.headers.host,
+      expires: new Date() + ms(TOKEN_EXPIRATION_TIME),
+    });
+    res.json({
+      success: true,
+      token: token,
+      user: req.user,
+    });
+  }
 
   const requestOptions = {
     json: true,
@@ -71,7 +93,7 @@ export default (
       if (!match) {
         return next(new AuthorizationError('Incorrect username or password'));
       }
-      const token = JWT.createToken(req.user);
+      const token = createToken(req.user);
       sendToken(req, res, token);
     },
 
@@ -88,7 +110,7 @@ export default (
       try {
         hash = await bcrypt.hash(req.body.password, saltRounds);
       } catch (err) {
-        next(err);
+        return next(err);
       }
 
       let newUser: Record<any>;
@@ -120,8 +142,51 @@ export default (
         return next(err);
       }
 
-      const token = JWT.createToken(newUser);
+      const token = createToken(newUser);
       sendToken(req, res, token);
+    },
+
+    checkForExistingUser: async (req, _res, next) => {
+      if (!req.body || !req.body.username) {
+        return next();
+      }
+      const username = req.body.username;
+      const queryUserUrl = AirtableRoute.users(
+        {
+          airtableBaseId,
+          airtableUserTableName,
+        },
+        {
+          filterByFormula: `${airtableUserTableName}="${username}"`,
+        },
+      );
+
+      try {
+        const {
+          body: { records },
+        } = await request({
+          url: queryUserUrl,
+          method: 'GET',
+          ...requestOptions,
+        });
+        req.user = records[0];
+        next();
+      } catch (err) {
+        next(err);
+      }
+    },
+
+    verifyToken: async (req, _res, next) => {
+      let token = req.headers.token as string;
+      if (token) {
+        jwt.verify(token, publicKey, (err, _decoded) => {
+          if (err) {
+            return next(new AuthorizationError('Invalid token supplied'));
+          }
+          return next();
+        });
+      }
+      return next(new InputError('No token supplied'));
     },
   };
 };

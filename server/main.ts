@@ -10,8 +10,6 @@ import path from 'path';
 import AuthController from './controllers/authController';
 import ProxyController from './controllers/proxyController';
 import { AuthorizationError, InputError } from './lib/errors';
-import { checkForExistingUser } from './middleware/checkForExistingUser';
-import JWT from './middleware/verifyToken';
 import validators from './validators';
 
 export type AirlockInitOptions = {
@@ -161,20 +159,20 @@ class Airlock {
     app.post(
       '/:version/:base/__DANGEROUSLY__USE__TABLE__TO__LET__USERS__REGISTER',
       bodyParser.json(),
-      checkForExistingUser,
+      authController.checkForExistingUser,
       authController.register,
     );
 
     app.post(
       '/:version/:base/__DANGEROUSLY__USE__TABLE__TO__LET__USERS__LOGIN',
       bodyParser.json(),
-      checkForExistingUser,
+      authController.checkForExistingUser,
       authController.login,
     );
 
     app.all(
       '/:version/:baseId/:tableIdOrName*',
-      JWT.verifyToken,
+      authController.verifyToken,
       ProxyController.web,
     );
 
