@@ -10,6 +10,7 @@ import AuthController from './controllers/authController';
 import ProxyController from './controllers/proxyController';
 import { checkForExistingUser } from './middleware/checkForExistingUser';
 import JWT from './middleware/verifyToken';
+import validators from './validators';
 
 type AirlockInitOptions = {
   baseId: string;
@@ -17,9 +18,10 @@ type AirlockInitOptions = {
   port?: number;
   configDir?: string;
   resolversDir?: string;
+  saltRounds?: number;
   airtableApiKey: string;
   airtableBaseId: string;
-  airtableTableName: string;
+  airtableUserTableName: string;
   airtableUsernameColumn: string;
   airtablePasswordColumn: string;
 };
@@ -36,28 +38,7 @@ class Airlock {
     {
       [K in keyof AirlockOptions]: (value: AirlockOptions[K]) => void;
     }
-  > = {
-    resolversDir: (resolversDir: string) => {
-      const stats: fs.Stats = fs.statSync(resolversDir);
-      if (!stats.isDirectory) {
-        throw new Error(`resolversDir '${resolversDir}' is not a directory`);
-      }
-    },
-    configDir: (configDir: string) => {
-      const stats: fs.Stats = fs.statSync(configDir);
-      if (!stats.isDirectory) {
-        throw new Error(`configDir '${configDir}' is not a directory`);
-      }
-      if (
-        !fs.existsSync(path.join(configDir, 'priv.pem')) ||
-        !fs.existsSync(path.join(configDir, 'pub.pem'))
-      ) {
-        throw new Error(
-          `Could not find pub.pem or priv.pem in your configDir, '${configDir}`,
-        );
-      }
-    },
-  };
+  > = validators;
 
   constructor(opts: AirlockInitOptions) {
     const { PUBLIC_KEY, PRIVATE_KEY } = process.env;
@@ -81,6 +62,7 @@ class Airlock {
       configDir: path.resolve(process.cwd(), 'config'),
       publicKey: '',
       privateKey: '',
+      saltRounds: 5,
       ...options,
     };
 
