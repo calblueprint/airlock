@@ -73,6 +73,7 @@ app.post(
 app.post(
   '/:version/:base/__DANGEROUSLY__USE__TABLE__TO__LET__USERS__LOGOUT',
   bodyParser.json(),
+  JWT.verifyToken,
   AuthController.logout,
 );
 
