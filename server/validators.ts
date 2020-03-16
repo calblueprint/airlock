@@ -14,11 +14,11 @@ export default {
       throw new Error(`configDir '${configDir}' is not a directory`);
     }
     if (
-      !fs.existsSync(path.join(configDir, 'priv.pem')) ||
-      !fs.existsSync(path.join(configDir, 'pub.pem'))
+      !fs.existsSync(path.join(configDir, 'jwt.key')) ||
+      !fs.existsSync(path.join(configDir, 'jwt.key.pub'))
     ) {
       throw new Error(
-        `Could not find pub.pem or priv.pem in your configDir, '${configDir}`,
+        `Could not find jwt.key or jwt.key.pub in your configDir, '${configDir}'`,
       );
     }
   },

@@ -4,14 +4,14 @@ import { Request, Response } from 'express';
 import isEmpty from 'lodash/isEmpty';
 import jwt from 'jsonwebtoken';
 import ms from 'ms';
+import _request from 'request';
 import util from 'util';
 
 import { AuthorizationError, InputError } from '../lib/errors';
 import { AirlockController, AirlockOptions } from '../main';
 import AirtableRoute from '../utils/AirtableRoute';
 
-const request = util.promisify(require('request'));
-
+const request = util.promisify(_request);
 const TOKEN_EXPIRATION_TIME = '1d';
 
 export default (
@@ -49,7 +49,7 @@ export default (
     res.cookie('airlock_token', token, {
       httpOnly: true,
       domain: req.headers.host,
-      expires: new Date() + ms(TOKEN_EXPIRATION_TIME),
+      expires: new Date(new Date() + ms(TOKEN_EXPIRATION_TIME)),
     });
     res.json({
       success: true,
@@ -75,9 +75,7 @@ export default (
   return {
     async login(req, res, next) {
       if (isEmpty(req.user)) {
-        return next(
-          new AuthorizationError('No token supplied or session expired'),
-        );
+        return next(new AuthorizationError('Incorrect username or password'));
       }
       const password = req.body.password;
       let match: boolean = false;
@@ -93,7 +91,13 @@ export default (
       if (!match) {
         return next(new AuthorizationError('Incorrect username or password'));
       }
-      const token = createToken(req.user);
+
+      let token: string;
+      try {
+        token = createToken(req.user);
+      } catch (err) {
+        return next(err);
+      }
       sendToken(req, res, token);
     },
 
@@ -142,7 +146,12 @@ export default (
         return next(err);
       }
 
-      const token = createToken(newUser);
+      let token: string;
+      try {
+        token = createToken(newUser);
+      } catch (err) {
+        return next(err);
+      }
       sendToken(req, res, token);
     },
 
@@ -157,19 +166,26 @@ export default (
           airtableUserTableName,
         },
         {
-          filterByFormula: `${airtableUserTableName}="${username}"`,
+          filterByFormula: `${airtableUsernameColumn}="${username}"`,
         },
       );
 
       try {
         const {
-          body: { records },
+          body: { records, error },
+          statusCode,
         } = await request({
           url: queryUserUrl,
           method: 'GET',
           ...requestOptions,
         });
-        req.user = records[0];
+        if (error || statusCode !== 200) {
+          throw new Error(
+            `[Airtable error: ${error?.type || ''}] ${error?.message ||
+              'unknown'}`,
+          );
+        }
+        [req.user] = records;
         next();
       } catch (err) {
         next(err);

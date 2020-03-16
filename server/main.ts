@@ -49,13 +49,13 @@ class Airlock {
     const { PUBLIC_KEY, PRIVATE_KEY } = process.env;
     if (PUBLIC_KEY) {
       fs.writeFileSync(
-        path.join(this.options.configDir, 'pub.pem'),
+        path.join(this.options.configDir, 'jwt.key.pub'),
         PUBLIC_KEY,
       );
     }
     if (PRIVATE_KEY) {
       fs.writeFileSync(
-        path.join(this.options.configDir, 'priv.pem'),
+        path.join(this.options.configDir, 'jwt.key'),
         PRIVATE_KEY,
       );
     }
@@ -74,7 +74,7 @@ class Airlock {
 
     const status: AirlockOptionStatus = this.validateOptions();
     if (!status.valid) {
-      console.error('Airlock could not start:');
+      console.error('⚠️ Airlock could not start:');
       status.reasons.forEach((reason: any) => {
         console.error(`- ${reason}`);
       });
@@ -116,8 +116,8 @@ class Airlock {
   }
 
   readConfigFiles(): { publicKey: string; privateKey: string } {
-    const publicKeyPath = path.resolve(this.options.configDir, 'pub.pem');
-    const privateKeyPath = path.resolve(this.options.configDir, 'priv.pem');
+    const publicKeyPath = path.resolve(this.options.configDir, 'jwt.key.pub');
+    const privateKeyPath = path.resolve(this.options.configDir, 'jwt.key');
     return {
       publicKey: fs.readFileSync(publicKeyPath).toString(),
       privateKey: fs.readFileSync(privateKeyPath).toString(),
@@ -158,14 +158,14 @@ class Airlock {
     });
 
     app.post(
-      '/:version/:base/__DANGEROUSLY__USE__TABLE__TO__LET__USERS__REGISTER',
+      '/:version/:base/__airlock_register__',
       bodyParser.json(),
       authController.checkForExistingUser,
       authController.register,
     );
 
     app.post(
-      '/:version/:base/__DANGEROUSLY__USE__TABLE__TO__LET__USERS__LOGIN',
+      '/:version/:base/__airlock_login__',
       bodyParser.json(),
       authController.checkForExistingUser,
       authController.login,
@@ -190,10 +190,19 @@ class Airlock {
         if (err instanceof AuthorizationError) {
           return res.status(401).send({ success: false, error: err });
         }
+
+        // Unexpected errors
         console.error(err);
+        if (err instanceof Error) {
+          err = err.toString();
+        }
+        if (typeof err === 'object') {
+          err = JSON.stringify(err);
+        }
         return res.status(500).send({ error: err });
       },
     );
+    console.log(`🚀 Airlock mounted and running on port ${this.options.port}`);
   }
 }
 

@@ -1,9 +1,11 @@
 {
-  "name": "server",
+  "name": "@calblueprint/airlock",
   "version": "1.0.0",
   "description": "airlock server",
-  "main": "app.js",
+  "main": "dist/main.js",
+  "types": "dist/main.d.ts",
   "scripts": {
+    "prepublish": "npm run build",
     "build": "tsc",
     "build:watch": "tsc -w",
     "dev": "NODE_ENV=development nodemon app.js",
@@ -20,6 +22,7 @@
     "@types/jsonwebtoken": "^8.3.8",
     "@types/lodash": "^4.14.149",
     "@types/node": "^13.9.1",
+    "@types/request": "^2.48.4",
     "bcrypt": "^3.0.6",
     "body-parser": "^1.19.0",
     "dotenv": "^8.1.0",
@@ -35,9 +38,12 @@
     "request": "^2.88.0"
   },
   "devDependencies": {
+    "@types/jest": "^25.1.4",
     "@typescript-eslint/eslint-plugin": "^2.23.0",
     "@typescript-eslint/parser": "^2.23.0",
     "eslint": "^6.8.0",
+    "jest": "^25.1.0",
+    "ts-jest": "^25.2.1",
     "typescript": "^3.8.3"
   }
 }
