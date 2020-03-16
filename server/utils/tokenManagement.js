@@ -1,15 +1,25 @@
 const tokenStore = require('../config/tokenStore');
 
-//returns value of token on success, null on failure
+/*
+ * Checks if token is present in the tokenStore,
+ * returns the value of the token, or nil when token does not exist.
+ * token: string
+ * value: string | null
+ */
 const isTokenRevoked = async token => {
-  const res = await tokenStore.getAsync(token);
-  return res;
+  const value = await tokenStore.getAsync(token);
+  return value;
 };
 
-//returns string OK on success, null on fail
+/*
+ * Adds token to tokenStore, along with the date the token was revoked
+ * returns a reply of "+OK\r\n" on sucess or null "$-1\r\n" on failure
+ * token: string
+ * response: string | null
+ */
 const revokeToken = async (token, revocationDate) => {
-  const res = await tokenStore.setAsync(token, revocationDate);
-  return res;
+  const response = await tokenStore.setAsync(token, revocationDate);
+  return response;
 };
 
 module.exports = {
