@@ -158,14 +158,14 @@ class Airlock {
     });
 
     app.post(
-      '/:version/:base/__airlock_register__',
+      '/:version/:baseId/__airlock_register__',
       bodyParser.json(),
       authController.checkForExistingUser,
       authController.register,
     );
 
     app.post(
-      '/:version/:base/__airlock_login__',
+      '/:version/:baseId/__airlock_login__',
       bodyParser.json(),
       authController.checkForExistingUser,
       authController.login,

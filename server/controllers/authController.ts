@@ -201,8 +201,9 @@ export default (
           }
           return next();
         });
+      } else {
+        return next(new InputError('No token supplied'));
       }
-      return next(new InputError('No token supplied'));
     },
   };
 };

@@ -19,20 +19,23 @@ export default (options: AirlockOptions): AirlockController<{ web: {} }> => {
     selfHandleResponse: true,
   });
 
-  async function handlePayload(buffer: Buffer, encoding: string) {
+  async function handlePayload(
+    buffer: Buffer,
+    encoding: string,
+  ): Promise<string> {
     return new Promise((resolve, reject) => {
       if (encoding === Encoding.GZIP) {
         zlib.gunzip(buffer, function(err, decoded) {
           if (err) return reject(err);
-          resolve(JSON.parse(decoded.toString()));
+          resolve(decoded.toString());
         });
       } else if (encoding === Encoding.DEFLATE) {
         zlib.inflate(buffer, function(err, decoded) {
           if (err) return reject(err);
-          resolve(JSON.parse(decoded.toString()));
+          resolve(decoded.toString());
         });
       } else {
-        resolve(JSON.parse(buffer.toString()));
+        resolve(buffer.toString());
       }
     });
   }
@@ -55,10 +58,12 @@ export default (options: AirlockOptions): AirlockController<{ web: {} }> => {
         buffer,
         proxyRes.headers['content-encoding'],
       );
-      if (req.method === 'GET') {
+      if (req.method === 'GET' && proxyRes.statusCode === 200) {
         cache.set(req, proxyPayload);
       }
-      res.statusCode = proxyRes.statusCode;
+      res.writeHead(proxyRes.statusCode, {
+        'content-type': proxyRes.headers['content-type'],
+      });
       res.write(proxyPayload);
       res.end();
     });
@@ -68,8 +73,9 @@ export default (options: AirlockOptions): AirlockController<{ web: {} }> => {
     web(req, res) {
       if (req.method === 'GET') {
         const content = cache.get(req);
-        if (content) {
-          return res.status(200).send(content);
+        if (content.data) {
+          res.setHeader('content-type', content.contentType);
+          return res.status(200).send(content.data);
         }
         return proxy.web(req, res, {
           target: AIRTABLE_API_BASE_URL,
