@@ -35,10 +35,12 @@
     "nodemon": "^1.19.3",
     "promise": "^8.0.3",
     "querystring": "^0.2.0",
-    "request": "^2.88.0"
+    "request": "^2.88.0",
+    "winston": "^3.2.1"
   },
   "devDependencies": {
     "@types/jest": "^25.1.4",
+    "@types/winston": "^2.4.4",
     "@typescript-eslint/eslint-plugin": "^2.23.0",
     "@typescript-eslint/parser": "^2.23.0",
     "eslint": "^6.8.0",

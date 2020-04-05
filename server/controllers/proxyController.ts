@@ -59,7 +59,7 @@ export default (options: AirlockOptions): AirlockController<{ web: {} }> => {
         proxyRes.headers['content-encoding'],
       );
       if (req.method === 'GET' && proxyRes.statusCode === 200) {
-        cache.set(req, proxyPayload);
+        cache.set(req, proxyPayload, proxyRes.headers['content-type']);
       }
       res.writeHead(proxyRes.statusCode, {
         'content-type': proxyRes.headers['content-type'],

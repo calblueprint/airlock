@@ -10,6 +10,7 @@ import path from 'path';
 import AuthController from './controllers/authController';
 import ProxyController from './controllers/proxyController';
 import { AuthorizationError, InputError } from './lib/errors';
+import logger from './utils/logger';
 import validators from './validators';
 
 export type AirlockInitOptions = {
@@ -74,10 +75,7 @@ class Airlock {
 
     const status: AirlockOptionStatus = this.validateOptions();
     if (!status.valid) {
-      console.error('⚠️ Airlock could not start:');
-      status.reasons.forEach((reason: any) => {
-        console.error(`- ${reason}`);
-      });
+      logger.error('⚠️ Airlock could not start:', status.reasons);
       process.exit(1);
     }
 
@@ -202,7 +200,7 @@ class Airlock {
         return res.status(500).send({ error: err });
       },
     );
-    console.log(`🚀 Airlock mounted and running on port ${this.options.port}`);
+    logger.info(`🚀 Airlock mounted and running on port ${this.options.port}`);
   }
 }
 
