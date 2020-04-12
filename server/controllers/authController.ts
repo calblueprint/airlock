@@ -23,6 +23,7 @@ export default (
   logout: {};
   checkForExistingUser: {};
   verifyToken: {};
+  checkTokenRevocation: {};
 }> => {
   const {
     airtableApiKey,
@@ -240,6 +241,22 @@ export default (
         });
       } else {
         return next(new InputError('No token supplied'));
+      }
+    },
+    async checkTokenRevocation(req, res, next) {
+      let token = req.headers['token'];
+      if (token) {
+        let value = await tokenManagement.isTokenRevoked(token);
+        if (value != null) {
+          return res.json({
+            success: false,
+            message: 'Token has been revoked',
+          });
+        } else {
+          return next();
+        }
+      } else {
+        return next(new InputError('Authorization token is not supplied'));
       }
     },
   };

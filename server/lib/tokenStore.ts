@@ -1,3 +1,4 @@
+require('dotenv').config();
 import util from 'util';
 import redis from 'redis';
 

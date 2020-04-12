@@ -173,13 +173,14 @@ class Airlock {
       '/:version/:baseId/__airlock_logout__',
       bodyParser.json(),
       authController.verifyToken,
-      authController.checkForExistingUser,
+      authController.checkTokenRevocation,
       authController.logout,
     );
 
     app.all(
       '/:version/:baseId/:tableIdOrName*',
       authController.verifyToken,
+      authController.checkTokenRevocation,
       proxyController.web,
     );
 
