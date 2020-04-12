@@ -1,5 +1,6 @@
 require('dotenv').config();
 
+import Airtable from 'airtable';
 import bodyParser from 'body-parser';
 import fs from 'fs';
 import express from 'express';
@@ -7,11 +8,17 @@ import { ParamsDictionary } from 'express-serve-static-core';
 import http from 'http';
 import path from 'path';
 
+import AccessController from './controllers/accessController';
 import AuthController from './controllers/authController';
 import ProxyController from './controllers/proxyController';
 import { AuthorizationError, InputError } from './lib/errors';
 import logger from './utils/logger';
 import validators from './validators';
+
+export type AirlockAccessResolver = (
+  record: Airtable.Record<object>,
+  user: Airtable.Record<object>,
+) => Promise<boolean>;
 
 export type AirlockInitOptions = {
   server?: express.Application;
@@ -26,15 +33,19 @@ export type AirlockInitOptions = {
   airtableUsernameColumn: string;
   airtablePasswordColumn: string;
 };
+
 export type AirlockOptions = Required<Omit<AirlockInitOptions, 'server'>> & {
   publicKey: string;
   privateKey: string;
+  accessResolvers: Record<string, AirlockAccessResolver>;
 };
+
 export type AirlockController<
   T extends { [actionName: string]: ParamsDictionary }
 > = {
   [K in keyof T]: express.RequestHandler<T[K]>;
 };
+
 type AirlockOptionStatus = { valid: boolean; reasons?: any[] };
 
 class Airlock {
@@ -62,16 +73,28 @@ class Airlock {
     }
 
     const { server, ...options } = opts;
+
+    // Set defaults for config, if they aren't set
     this.options = {
       port: Number(process.env.PORT) || 4000,
-      resolversDir: path.resolve(process.cwd(), 'resolvers'),
-      configDir: path.resolve(process.cwd(), 'config'),
       publicKey: '',
       privateKey: '',
       disableHashPassword: false,
       saltRounds: 5,
+      configDir: 'config',
+      resolversDir: 'resolvers',
+      accessResolvers: {},
       ...options,
     };
+    this.options.resolversDir = path.resolve(
+      process.cwd(),
+      this.options.resolversDir,
+    );
+    this.options.configDir = path.resolve(
+      process.cwd(),
+      this.options.configDir,
+    );
+    this.options.accessResolvers = require(this.options.resolversDir);
 
     const status: AirlockOptionStatus = this.validateOptions();
     if (!status.valid) {
@@ -132,6 +155,7 @@ class Airlock {
     const app: express.Application = this.server;
     const authController = AuthController(this.options);
     const proxyController = ProxyController(this.options);
+    const accessController = AccessController(this.options);
 
     app.use((req, res, next) => {
       res.header('Access-Control-Allow-Origin', '*');
@@ -170,9 +194,10 @@ class Airlock {
     );
 
     app.all(
-      '/:version/:baseId/:tableIdOrName*',
+      '/:version/:baseId/:tableName/*',
       authController.verifyToken,
       proxyController.web,
+      accessController.filterResponse,
     );
 
     app.use(

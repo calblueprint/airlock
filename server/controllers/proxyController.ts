@@ -1,3 +1,4 @@
+import { Record } from 'airtable';
 import { IncomingMessage, ServerResponse } from 'http';
 import httpProxy from 'http-proxy';
 import zlib from 'zlib';
@@ -25,12 +26,12 @@ export default (options: AirlockOptions): AirlockController<{ web: {} }> => {
   ): Promise<string> {
     return new Promise((resolve, reject) => {
       if (encoding === Encoding.GZIP) {
-        zlib.gunzip(buffer, function(err, decoded) {
+        zlib.gunzip(buffer, function (err, decoded) {
           if (err) return reject(err);
           resolve(decoded.toString());
         });
       } else if (encoding === Encoding.DEFLATE) {
-        zlib.inflate(buffer, function(err, decoded) {
+        zlib.inflate(buffer, function (err, decoded) {
           if (err) return reject(err);
           resolve(decoded.toString());
         });
@@ -40,19 +41,19 @@ export default (options: AirlockOptions): AirlockController<{ web: {} }> => {
     });
   }
 
-  proxy.on('proxyReq', function(proxyReq) {
+  proxy.on('proxyReq', function (proxyReq) {
     proxyReq.setHeader('authorization', `Bearer ${airtableApiKey}`);
   });
-  proxy.on('proxyRes', function(
+  proxy.on('proxyRes', function (
     proxyRes: IncomingMessage,
     req: IncomingMessage,
     res: ServerResponse,
   ) {
     var body = [];
-    proxyRes.on('data', function(chunk) {
+    proxyRes.on('data', function (chunk) {
       body.push(chunk);
     });
-    proxyRes.on('end', async function() {
+    proxyRes.on('end', async function () {
       const buffer = Buffer.concat(body);
       const proxyPayload = await handlePayload(
         buffer,
@@ -61,23 +62,38 @@ export default (options: AirlockOptions): AirlockController<{ web: {} }> => {
       if (req.method === 'GET' && proxyRes.statusCode === 200) {
         cache.set(req, proxyPayload, proxyRes.headers['content-type']);
       }
-      res.writeHead(proxyRes.statusCode, {
-        'content-type': proxyRes.headers['content-type'],
-      });
-      res.write(proxyPayload);
-      res.end();
+
+      res.setHeader('content-type', proxyRes.headers['content-type']);
+      if (proxyRes.statusCode !== 200) {
+        req.emit('payloadError', proxyPayload);
+      } else {
+        req.emit('payloadReady', proxyPayload);
+      }
     });
   });
 
   return {
-    web(req, res) {
+    web(req, res, next) {
+      // Setup forwarding to next controller, if proxy passes
+      req.on('payloadError', (err: string) => {
+        next(err);
+      });
+      req.on('payloadReady', (payload: string) => {
+        req.context = JSON.parse(payload) as
+          | Record<any>
+          | { records: Record<any>[] };
+        next();
+      });
+
       if (req.method === 'GET') {
         const content = cache.get(req);
         if (content.data) {
           res.setHeader('content-type', content.contentType);
-          return res.status(200).send(content.data);
+          req.emit('payloadReady', content.data);
+          return;
         }
-        return proxy.web(req, res, {
+
+        proxy.web(req, res, {
           target: AIRTABLE_API_BASE_URL,
         });
       } else {

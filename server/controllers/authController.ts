@@ -10,6 +10,7 @@ import util from 'util';
 import { AuthorizationError, InputError } from '../lib/errors';
 import { AirlockController, AirlockOptions } from '../main';
 import AirtableRoute from '../utils/AirtableRoute';
+import logger from '../utils/logger';
 
 const request = util.promisify(_request);
 const TOKEN_EXPIRATION_TIME = '1d';
@@ -181,8 +182,9 @@ export default (
         });
         if (error || statusCode !== 200) {
           throw new Error(
-            `[Airtable error: ${error?.type || ''}] ${error?.message ||
-              'unknown'}`,
+            `[Airtable error: ${error?.type || ''}] ${
+              error?.message || 'unknown'
+            }`,
           );
         }
         [req.user] = records;
@@ -195,10 +197,12 @@ export default (
     verifyToken(req, _res, next) {
       let token = req.headers.token as string;
       if (token) {
-        jwt.verify(token, publicKey, (err, _decoded) => {
+        jwt.verify(token, publicKey, (err, decoded) => {
           if (err) {
             return next(new AuthorizationError('Invalid token supplied'));
           }
+          req.user = decoded as Record<any>;
+          logger.debug(`Authenticated user: ${JSON.stringify(req.user)}`);
           return next();
         });
       } else {
