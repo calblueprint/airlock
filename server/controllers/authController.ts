@@ -10,6 +10,7 @@ import util from 'util';
 import { AuthorizationError, InputError } from '../lib/errors';
 import { AirlockController, AirlockOptions } from '../main';
 import AirtableRoute from '../utils/AirtableRoute';
+import tokenManagement from '../utils/tokenManagement';
 
 const request = util.promisify(_request);
 const TOKEN_EXPIRATION_TIME = '1d';
@@ -19,6 +20,7 @@ export default (
 ): AirlockController<{
   login: {};
   register: {};
+  logout: {};
   checkForExistingUser: {};
   verifyToken: {};
 }> => {
@@ -154,6 +156,40 @@ export default (
       }
       sendToken(req, res, token);
     },
+    async logout(req, res) {
+      let token = req.headers['token'];
+      if (token) {
+        let value = await tokenManagement.isTokenRevoked(token);
+        if (value != null) {
+          return res.json({
+            success: false,
+            message: 'User has already been logged out',
+          });
+        } else {
+          const revocationDate = new Date();
+          let status = await tokenManagement.revokeToken(
+            token,
+            revocationDate.toString(),
+          );
+          if (status == 'OK') {
+            return res.json({
+              success: true,
+              message: 'User successfully logged out',
+            });
+          } else {
+            return res.json({
+              success: false,
+              message: 'User unsuccessfully logged out',
+            });
+          }
+        }
+      } else {
+        return res.json({
+          success: false,
+          message: 'Authorization token is not supplied',
+        });
+      }
+    },
 
     async checkForExistingUser(req, _res, next) {
       if (!req.body || !req.body.username) {
@@ -181,8 +217,9 @@ export default (
         });
         if (error || statusCode !== 200) {
           throw new Error(
-            `[Airtable error: ${error?.type || ''}] ${error?.message ||
-              'unknown'}`,
+            `[Airtable error: ${error?.type || ''}] ${
+              error?.message || 'unknown'
+            }`,
           );
         }
         [req.user] = records;

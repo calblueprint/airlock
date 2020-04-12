@@ -169,6 +169,14 @@ class Airlock {
       authController.login,
     );
 
+    app.post(
+      '/:version/:baseId/__airlock_logout__',
+      bodyParser.json(),
+      authController.verifyToken,
+      authController.checkForExistingUser,
+      authController.logout,
+    );
+
     app.all(
       '/:version/:baseId/:tableIdOrName*',
       authController.verifyToken,
