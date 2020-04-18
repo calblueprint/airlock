@@ -194,7 +194,7 @@ class Airlock {
     );
 
     app.all(
-      '/:version/:baseId/:tableName/*',
+      '/:version/:baseId/:tableName/:recordId?',
       authController.verifyToken,
       proxyController.web,
       accessController.filterResponse,

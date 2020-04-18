@@ -167,7 +167,7 @@ export default (
           airtableUserTableName,
         },
         {
-          filterByFormula: `${airtableUsernameColumn}="${username}"`,
+          filterByFormula: `{${airtableUsernameColumn}}="${username}"`,
         },
       );
 

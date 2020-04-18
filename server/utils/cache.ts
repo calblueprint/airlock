@@ -21,7 +21,7 @@ const createClearKey = (req: IncomingMessage): string => {
   const urlParse = /\/(v[^/]*)\/(app[^/]+)\/([^?/]+)[\/.+]*/;
   const [, version, baseId, tableName] = req.url.match(urlParse);
   const cacheKey = [version, baseId, tableName].join('/');
-  return cacheKey;
+  return `/${cacheKey}`;
 };
 
 const get = (req: IncomingMessage): CacheEntry => {
@@ -48,9 +48,13 @@ const set = (req: IncomingMessage, data: string, contentType: string): void => {
 
 const clear = (req: IncomingMessage): void => {
   const urlKey = createClearKey(req);
-  const removeKeys = cache.keys().filter(k => k.includes(urlKey));
+  const removeKeys = cache.keys().filter((k) => k.includes(urlKey));
   cache.del(removeKeys);
-  logger.debug(`Clearing cache keys: ${JSON.stringify(removeKeys)}`);
+  logger.debug(
+    `Clearing cache keys: ${JSON.stringify(
+      removeKeys,
+    )} from clearKey: ${urlKey}`,
+  );
 };
 
 export default {
