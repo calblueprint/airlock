@@ -1,11 +1,13 @@
 import { Record } from 'airtable';
-import { IncomingMessage, ServerResponse } from 'http';
+import { ClientRequest, IncomingMessage, ServerResponse } from 'http';
 import httpProxy from 'http-proxy';
+import queryString from 'querystring';
 import zlib from 'zlib';
 
 import { AirlockController, AirlockOptions } from '../main';
 import { AIRTABLE_API_BASE_URL } from '../utils/AirtableRoute';
 import cache from '../utils/cache';
+import logger from '../utils/logger';
 
 enum Encoding {
   GZIP = 'gzip',
@@ -41,9 +43,25 @@ export default (options: AirlockOptions): AirlockController<{ web: {} }> => {
     });
   }
 
-  proxy.on('proxyReq', function (proxyReq) {
+  proxy.on('proxyReq', function (
+    proxyReq: ClientRequest,
+    req: IncomingMessage,
+  ) {
     proxyReq.setHeader('authorization', `Bearer ${airtableApiKey}`);
+    const contentType = proxyReq.getHeader('Content-Type');
+    // @ts-ignore
+    let bodyData = req.body || '';
+    if (contentType === 'application/json') {
+      bodyData = JSON.stringify(bodyData);
+    }
+    if (contentType === 'application/x-www-form-urlencoded') {
+      bodyData = queryString.stringify(bodyData);
+    }
+
+    proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+    proxyReq.write(bodyData);
   });
+
   proxy.on('proxyRes', function (
     proxyRes: IncomingMessage,
     req: IncomingMessage,
@@ -53,21 +71,29 @@ export default (options: AirlockOptions): AirlockController<{ web: {} }> => {
     proxyRes.on('data', function (chunk) {
       body.push(chunk);
     });
-    proxyRes.on('end', async function () {
-      const buffer = Buffer.concat(body);
-      const proxyPayload = await handlePayload(
-        buffer,
-        proxyRes.headers['content-encoding'],
-      );
-      if (req.method === 'GET' && proxyRes.statusCode === 200) {
-        cache.set(req, proxyPayload, proxyRes.headers['content-type']);
-      }
 
-      res.setHeader('content-type', proxyRes.headers['content-type']);
-      if (proxyRes.statusCode !== 200) {
-        req.emit('payloadError', proxyPayload);
-      } else {
-        req.emit('payloadReady', proxyPayload);
+    proxyRes.on('end', async function () {
+      try {
+        const buffer = Buffer.concat(body);
+        const proxyPayload = await handlePayload(
+          buffer,
+          proxyRes.headers['content-encoding'],
+        );
+        if (req.method === 'GET' && proxyRes.statusCode === 200) {
+          cache.set(req, proxyPayload, proxyRes.headers['content-type']);
+        }
+
+        res.setHeader('content-type', proxyRes.headers['content-type']);
+        if (proxyRes.statusCode !== 200) {
+          req.emit('payloadError', proxyPayload);
+        } else {
+          req.emit('payloadReady', proxyPayload);
+        }
+      } catch (err) {
+        logger.error(
+          `Unexpected error occurred forwarding the proxy payload: ${err}\n${err.stack}`,
+        );
+        req.emit('payloadError', 'An unexpected Airlock error occurred');
       }
     });
   });
