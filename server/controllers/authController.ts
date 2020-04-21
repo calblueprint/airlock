@@ -48,8 +48,9 @@ export default (
   function sendToken(req: Request, res: Response, token: string): void {
     res.cookie('airlock_token', token, {
       httpOnly: true,
-      domain: req.headers.host,
-      expires: new Date(new Date() + ms(TOKEN_EXPIRATION_TIME)),
+      domain: req.hostname,
+      path: '/',
+      expires: new Date(Date.now() + ms(TOKEN_EXPIRATION_TIME)),
     });
     res.json({
       success: true,

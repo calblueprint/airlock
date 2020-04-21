@@ -2,6 +2,7 @@ require('dotenv').config();
 
 import Airtable from 'airtable';
 import bodyParser from 'body-parser';
+import cookieParser from 'cookie-parser';
 import fs from 'fs';
 import express from 'express';
 import { ParamsDictionary } from 'express-serve-static-core';
@@ -197,6 +198,7 @@ class Airlock {
 
     app.all(
       '/:version/:baseId/:tableName/:recordId?',
+      cookieParser(),
       bodyParser.json(),
       authController.verifyToken,
       proxyController.hydrateRecordIds,

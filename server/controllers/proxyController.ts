@@ -58,7 +58,7 @@ export default (
     const contentType = proxyReq.getHeader('Content-Type');
 
     // @ts-ignore
-    let bodyData = req.body || '';
+    let bodyData = Object.keys(req.body) > 0 ? req.body : '';
     if (contentType === 'application/json') {
       bodyData = JSON.stringify(bodyData);
     }
