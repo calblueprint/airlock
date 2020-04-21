@@ -1,11 +1,12 @@
 import { Record } from 'airtable';
 import { ClientRequest, IncomingMessage, ServerResponse } from 'http';
 import httpProxy from 'http-proxy';
-import queryString from 'querystring';
+import querystring from 'querystring';
+import url from 'url';
 import zlib from 'zlib';
 
 import { AirlockController, AirlockOptions } from '../main';
-import { AIRTABLE_API_BASE_URL } from '../utils/AirtableRoute';
+import { AIRTABLE_API_BASE_URL, fetchRecordsByIds } from '../utils/airtable';
 import cache from '../utils/cache';
 import logger from '../utils/logger';
 
@@ -14,7 +15,13 @@ enum Encoding {
   DEFLATE = 'deflate',
 }
 
-export default (options: AirlockOptions): AirlockController<{ web: {} }> => {
+export default (
+  options: AirlockOptions,
+): AirlockController<{
+  web: {};
+  hydrateRecordIds: { tableName: string };
+  flattenRecordsToIds: { tableName: string };
+}> => {
   const { airtableApiKey } = options;
   const proxy = httpProxy.createProxyServer({
     changeOrigin: true,
@@ -49,13 +56,14 @@ export default (options: AirlockOptions): AirlockController<{ web: {} }> => {
   ) {
     proxyReq.setHeader('authorization', `Bearer ${airtableApiKey}`);
     const contentType = proxyReq.getHeader('Content-Type');
+
     // @ts-ignore
     let bodyData = req.body || '';
     if (contentType === 'application/json') {
       bodyData = JSON.stringify(bodyData);
     }
     if (contentType === 'application/x-www-form-urlencoded') {
-      bodyData = queryString.stringify(bodyData);
+      bodyData = querystring.stringify(bodyData);
     }
 
     proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
@@ -128,6 +136,31 @@ export default (options: AirlockOptions): AirlockController<{ web: {} }> => {
           target: AIRTABLE_API_BASE_URL,
         });
       }
+    },
+
+    async hydrateRecordIds(req, _res, next) {
+      if (Array.isArray(req.query.records)) {
+        req.body = {
+          records: await fetchRecordsByIds(
+            req.query.records,
+            req.params.tableName,
+            options,
+          ),
+        };
+      }
+      next();
+    },
+
+    flattenRecordsToIds(req, _res, next) {
+      if (req.body && Array.isArray(req.body.records)) {
+        const ids = req.body.records.map((record: Record<any>) => record.id);
+        const parsedUrl = url.parse(req.url, true);
+        parsedUrl.query.records = ids;
+
+        req.url = url.format(parsedUrl);
+        req.query.records = ids;
+      }
+      next();
     },
   };
 };

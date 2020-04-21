@@ -105,6 +105,8 @@ class Airlock {
     this.options = { ...this.options, ...this.readConfigFiles() };
     if (!server) {
       this.createServer();
+    } else {
+      this.server = server;
     }
     this.mountAirlock();
   }
@@ -197,7 +199,9 @@ class Airlock {
       '/:version/:baseId/:tableName/:recordId?',
       bodyParser.json(),
       authController.verifyToken,
+      proxyController.hydrateRecordIds,
       accessController.filterRequest,
+      proxyController.flattenRecordsToIds,
       proxyController.web,
       accessController.filterResponse,
     );

@@ -85,7 +85,7 @@ export default (
         return;
       }
 
-      if (req.body) {
+      if (operation.type === OperationType.WRITE && req.body) {
         const payload: Record<any> | { records: Record<any>[] } = req.body;
         req.body = await runAccessResolver(
           accessResolver,

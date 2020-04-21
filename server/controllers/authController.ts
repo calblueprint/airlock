@@ -9,7 +9,7 @@ import util from 'util';
 
 import { AuthorizationError, InputError } from '../lib/errors';
 import { AirlockController, AirlockOptions } from '../main';
-import AirtableRoute from '../utils/AirtableRoute';
+import { fetchRecordsByIds, requestOptions, routes } from '../utils/airtable';
 import logger from '../utils/logger';
 
 const request = util.promisify(_request);
@@ -24,7 +24,6 @@ export default (
   verifyToken: {};
 }> => {
   const {
-    airtableApiKey,
     airtableBaseId,
     airtableUsernameColumn,
     airtablePasswordColumn,
@@ -58,20 +57,6 @@ export default (
       user: req.user,
     });
   }
-
-  const requestOptions = {
-    json: true,
-    timeout: 5000,
-    headers: {
-      authorization: `Bearer ${airtableApiKey}`,
-      'x-api-version': '0.1.0',
-      'x-airtable-application-id': airtableBaseId,
-      'User-Agent': 'Airtable.js/0.7.1',
-    },
-    agentOptions: {
-      rejectUnauthorized: false,
-    },
-  };
 
   return {
     async login(req, res, next) {
@@ -123,7 +108,7 @@ export default (
         const {
           body: { error: err, ...user },
         } = await request({
-          url: AirtableRoute.users({
+          url: routes.users({
             airtableBaseId,
             airtableUserTableName,
           }),
@@ -137,7 +122,7 @@ export default (
               }`,
             },
           },
-          ...requestOptions,
+          ...requestOptions(opts),
         });
         if (err) {
           throw err;
@@ -161,7 +146,7 @@ export default (
         return next();
       }
       const username = req.body.username;
-      const queryUserUrl = AirtableRoute.users(
+      const queryUserUrl = routes.users(
         {
           airtableBaseId,
           airtableUserTableName,
@@ -178,7 +163,7 @@ export default (
         } = await request({
           url: queryUserUrl,
           method: 'GET',
-          ...requestOptions,
+          ...requestOptions(opts),
         });
         if (error || statusCode !== 200) {
           throw new Error(
@@ -195,15 +180,25 @@ export default (
     },
 
     verifyToken(req, _res, next) {
-      let token = req.headers.token as string;
+      let token =
+        (req.headers.token as string) || (req.cookies.airlock_token as string);
+
       if (token) {
         jwt.verify(token, publicKey, (err, decoded) => {
           if (err) {
             return next(new AuthorizationError('Invalid token supplied'));
           }
-          req.user = decoded as Record<any>;
-          logger.debug(`Authenticated user: ${JSON.stringify(req.user)}`);
-          return next();
+          fetchRecordsByIds(
+            [(decoded as Record<any>).id],
+            opts.airtableUserTableName,
+            opts,
+          )
+            .then(([user]) => {
+              req.user = user;
+              logger.debug(`Authenticated user: ${JSON.stringify(req.user)}`);
+              next();
+            })
+            .catch((err) => next(err));
         });
       } else {
         return next(new InputError('No token supplied'));

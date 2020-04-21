@@ -1,6 +1,6 @@
 {
-  "name": "@calblueprint/airlock",
-  "version": "1.0.0",
+  "name": "airlock-server",
+  "version": "0.1.1",
   "description": "airlock server",
   "main": "dist/main.js",
   "types": "dist/main.d.ts",
