@@ -1,6 +1,6 @@
 {
   "name": "airlock-server",
-  "version": "0.2.10",
+  "version": "0.2.14",
   "description": "airlock server",
   "main": "dist/main.js",
   "types": "dist/main.d.ts",

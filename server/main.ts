@@ -24,6 +24,7 @@ export type AirlockAccessResolver = (
 export type AirlockInitOptions = {
   server?: express.Application;
   port?: number;
+  allowedOrigins?: string[];
   configDir?: string;
   resolversDir?: string;
   disableHashPassword?: boolean;
@@ -88,6 +89,7 @@ class Airlock {
       configDir: 'config',
       resolversDir: 'resolvers',
       accessResolvers: {},
+      allowedOrigins: [],
       ...options,
     };
     this.options.resolversDir = path.resolve(
@@ -177,7 +179,23 @@ class Airlock {
     const accessController = AccessController(this.options);
 
     app.use((req, res, next) => {
-      res.header('Access-Control-Allow-Origin', '*');
+      if (this.options.allowedOrigins.length === 0) {
+        // Permit all, if allowedOrigins is unspecified
+        res.header('Access-Control-Allow-Origin', '*');
+      } else {
+        if (this.options.allowedOrigins.includes(req.get('origin'))) {
+          res.header('Access-Control-Allow-Origin', req.get('origin'));
+          res.header('Access-Control-Allow-Credentials', 'true');
+        } else {
+          // In case the Origin header is unspecified, we'll use the first
+          // allowed origin for the CORS header
+          res.header(
+            'Access-Control-Allow-Origin',
+            this.options.allowedOrigins[0],
+          );
+        }
+      }
+
       res.header(
         'Access-Control-Allow-Headers',
         [
@@ -252,6 +270,11 @@ class Airlock {
       },
     );
     logger.info(`🚀 Airlock mounted and running on port ${this.options.port}`);
+    if (this.options.allowedOrigins.length === 0) {
+      logger.warn(
+        `No allowedOrigins specified. Defaulting to permit all cross-origin requests.`,
+      );
+    }
   }
 }
 
