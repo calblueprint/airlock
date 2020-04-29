@@ -25,10 +25,16 @@ var forEach = require('lodash/forEach');
 var AirtableError = require('./airtable_error');
 var Table = require('./table');
 var runAction = require('./run_action');
+var callbackToPromise = require('./callback_to_promise');
 
 function Base(airtable, baseId) {
     this._airtable = airtable;
     this._id = baseId;
+    this._user = this._getLocalStorage('user');
+    this._token = this._getLocalStorage('token');
+    this.register = callbackToPromise(this.register, this);
+    this.login = callbackToPromise(this.login, this);
+    this.logout = callbackToPromise(this.logout, this);
 }
 
 Base.prototype.table = function(tableName) {
@@ -42,7 +48,7 @@ Base.prototype.runAction = function(method, path, queryParams, bodyData, callbac
 Base.prototype._checkStatusForError = function(statusCode, body) {
     if (statusCode === 401) {
         return new AirtableError('AUTHENTICATION_REQUIRED', 'You should provide valid api key to perform this operation', statusCode);
-    } else if (statusCode === 403) {
+    } else if (statusCode === 400 || statusCode === 403) {
         return new AirtableError('NOT_AUTHORIZED', 'You are not authorized to perform this operation', statusCode);
     } else if (statusCode === 404) {
         return (function() {
@@ -74,6 +80,63 @@ Base.prototype._checkStatusForError = function(statusCode, body) {
     }
 };
 
+Base.prototype.register = function({username, password, fields}, done) {
+    if (!username) {
+        throw new AirtableError('NOT_FOUND', "Missing parameter 'username' required for Base#register", 404);
+    }
+    if (!password) {
+        throw new AirtableError('NOT_FOUND', "Missing parameter 'password' required for Base#register", 404);
+    }
+    if (this._airtable._endpointUrl.includes('https://api.airtable.com')) {
+        throw new AirtableError('NOT_AUTHORIZED', 'Base#register cannot be used with api.airtable.com. Please configure this Airlock client to use an Airlock endpoint URL.', 403);
+    }
+    runAction(this, 'post', '/__airlock_register__', {}, {username, password, fields}, (err, data) => {
+        this._user = data.body.user;
+        this._token = data.body.token;
+        done(err, data);
+    });
+};
+
+Base.prototype.login = function({username, password}, done) {
+    if (!username) {
+        throw new AirtableError('NOT_FOUND', "Missing parameter 'username' required for Base#login", 404);
+    }
+    if (!password) {
+        throw new AirtableError('NOT_FOUND', "Missing parameter 'password' required for Base#login", 404);
+    }
+    if (this._airtable._endpointUrl.includes('https://api.airtable.com')) {
+        throw new AirtableError('NOT_AUTHORIZED', 'Base#login cannot be used with api.airtable.com. Please configure this Airlock client to use an Airlock endpoint URL.', 403);
+    }
+    runAction(this, 'post', '/__airlock_login__', {}, {username, password}, (err, data) => {
+        this._user = data.body.user;
+        this._token = data.body.token;
+        done(err, data);
+    });
+};
+
+
+Base.prototype.logout = function(done) {
+    if (this._airtable._endpointUrl.includes('https://api.airtable.com')) {
+        throw new AirtableError('NOT_AUTHORIZED', 'Base#logout cannot be used with api.airtable.com. Please configure this Airlock client to use an Airlock endpoint URL.', 403);
+    }
+    this._user = null;
+    this._token = null;
+    runAction(this, 'post', '/__airlock_logout__', {}, {}, (err, data) => {
+        this._user = data.body.user;
+        this._token = data.body.token;
+        done(err, data);
+    });
+};
+
+Base.prototype._setLocalStorage = function(key, value) {
+    localStorage.setItem(key, JSON.stringify(value));
+};
+
+Base.prototype._getLocalStorage = function(key) {
+    let value = localStorage.getItem(key) || null;
+    return value ? JSON.parse(value) : null;
+};
+
 Base.prototype.doCall = function(tableName) {
     return this.table(tableName);
 };
@@ -82,12 +145,30 @@ Base.prototype.getId = function() {
     return this._id;
 };
 
+Base.prototype.getUser = function() {
+    return this._user;
+};
+
+Base.prototype.getUsername = function() {
+    if (this._token === null || this._user === null) {
+        return null;
+    }
+    return this._user.username;
+};
+
+Base.prototype.getToken = function() {
+    if (this._token === null) {
+        return null;
+    }
+    return this._token;
+};
+
 Base.createFunctor = function(airtable, baseId) {
     var base = new Base(airtable, baseId);
     var baseFn = function() {
         return base.doCall.apply(base, arguments);
     };
-    forEach(['table', 'runAction', 'getId'], function(baseMethod) {
+    forEach(['table', 'runAction', 'getId', 'register', 'login', 'logout', 'getUser', 'getUsername', 'getToken'], function(baseMethod) {
         baseFn[baseMethod] = base[baseMethod].bind(base);
     });
     baseFn._base = base;
@@ -97,7 +178,7 @@ Base.createFunctor = function(airtable, baseId) {
 
 module.exports = Base;
 
-},{"./airtable_error":1,"./run_action":11,"./table":12,"lodash/forEach":163}],3:[function(require,module,exports){
+},{"./airtable_error":1,"./callback_to_promise":3,"./run_action":11,"./table":12,"lodash/forEach":163}],3:[function(require,module,exports){
 'use strict';
 
 /**
@@ -240,7 +321,7 @@ function objectToQueryParamString(obj) {
 module.exports = objectToQueryParamString;
 
 },{"lodash/forEach":163,"lodash/isArray":169,"lodash/isNil":175}],8:[function(require,module,exports){
-module.exports = "0.7.1";
+module.exports = "0.7.2";
 
 },{}],9:[function(require,module,exports){
 'use strict';
@@ -605,6 +686,10 @@ function runAction(base, method, path, queryParams, bodyData, callback, numAttem
             rejectUnauthorized: base._airtable._allowUnauthorizedSsl
         },
     };
+
+    if (path.indexOf('__airlock')) {
+        options.withCredentials = true;
+    }
 
     if (bodyData !== null) {
         options.body = bodyData;
@@ -6594,6 +6679,9 @@ function Airtable(opts) {
         _noRetryIfRateLimited: {
             value: opts.noRetryIfRateLimited || Airtable.noRetryIfRateLimited || defaultConfig.noRetryIfRateLimited,
         },
+        _userTable: {
+            value: opts.userTable || Airtable.userTable
+        }
     });
 
     this.requestTimeout = opts.requestTimeout || defaultConfig.requestTimeout;
@@ -6624,6 +6712,7 @@ Airtable.configure = function(opts) {
     Airtable.apiVersion = opts.apiVersion;
     Airtable.allowUnauthorizedSsl = opts.allowUnauthorizedSsl;
     Airtable.noRetryIfRateLimited = opts.noRetryIfRateLimited;
+    Airtable.userTable = opts.userTable;
 };
 
 Airtable.base = function(baseId) {
