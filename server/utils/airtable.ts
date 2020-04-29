@@ -11,19 +11,28 @@ type AirtableOptions = Pick<
   'airtableBaseId' | 'airtableUserTableName'
 >;
 
-export const requestOptions = (options: AirlockOptions): CoreOptions => ({
-  json: true,
-  timeout: 5000,
-  headers: {
-    authorization: `Bearer ${options.airtableApiKey}`,
-    'x-api-version': '0.1.0',
-    'x-airtable-application-id': options.airtableBaseId,
-    'User-Agent': 'Airtable.js/0.7.1',
-  },
-  agentOptions: {
-    rejectUnauthorized: false,
-  },
-});
+export const requestOptions = (options: AirlockOptions): CoreOptions => {
+  const requestOpts = {
+    json: true,
+    timeout: 5000,
+    headers: {
+      authorization: `Bearer ${options.airtableApiKey[options.apiKeyIndex]}`,
+      'x-api-version': '0.1.0',
+      'x-airtable-application-id': options.airtableBaseId,
+      'User-Agent': 'Airtable.js/0.7.1',
+    },
+    agentOptions: {
+      rejectUnauthorized: false,
+    },
+  };
+
+  options.apiKeyIndex += 1;
+  if (options.apiKeyIndex === options.airtableApiKey.length) {
+    options.apiKeyIndex = 0;
+  }
+
+  return requestOpts;
+};
 
 export const AIRTABLE_API_BASE_URL = 'https://api.airtable.com/';
 export const routes = {

@@ -6,7 +6,11 @@ import url from 'url';
 import zlib from 'zlib';
 
 import { AirlockController, AirlockOptions } from '../main';
-import { AIRTABLE_API_BASE_URL, fetchRecordsByIds } from '../utils/airtable';
+import {
+  AIRTABLE_API_BASE_URL,
+  fetchRecordsByIds,
+  requestOptions,
+} from '../utils/airtable';
 import cache from '../utils/cache';
 import logger from '../utils/logger';
 
@@ -22,7 +26,6 @@ export default (
   hydrateRecordIds: { tableName: string };
   flattenRecordsToIds: { tableName: string };
 }> => {
-  const { airtableApiKey } = options;
   const proxy = httpProxy.createProxyServer({
     changeOrigin: true,
     ignorePath: false,
@@ -54,11 +57,14 @@ export default (
     proxyReq: ClientRequest,
     req: IncomingMessage,
   ) {
-    proxyReq.setHeader('authorization', `Bearer ${airtableApiKey}`);
+    proxyReq.setHeader(
+      'authorization',
+      requestOptions(options).headers.authorization,
+    );
     const contentType = proxyReq.getHeader('Content-Type');
 
     // @ts-ignore
-    let bodyData = Object.keys(req.body) > 0 ? req.body : '';
+    let bodyData = Object.keys(req.body || {}).length > 0 ? req.body : '';
     if (contentType === 'application/json') {
       bodyData = JSON.stringify(bodyData);
     }
@@ -67,6 +73,7 @@ export default (
     }
 
     proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+    logger.debug(`writing bodyData to proxy: ${bodyData}`);
     proxyReq.write(bodyData);
   });
 
@@ -108,6 +115,11 @@ export default (
 
   return {
     web(req, res, next) {
+      logger.debug(
+        `received ${JSON.stringify(req.query)} for ${
+          req.url
+        } in proxyController.web`,
+      );
       // Setup forwarding to next controller, if proxy passes
       req.on('payloadError', (err: string) => {
         next(err);
@@ -152,12 +164,30 @@ export default (
     },
 
     flattenRecordsToIds(req, _res, next) {
-      if (req.body && Array.isArray(req.body.records)) {
-        const ids = req.body.records.map((record: Record<any>) => record.id);
-        const parsedUrl = url.parse(req.url, true);
-        parsedUrl.query.records = ids;
+      if (
+        req.method === 'DELETE' &&
+        req.body &&
+        Array.isArray(req.body.records)
+      ) {
+        const ids: string[] = req.body.records.map(
+          (record: Record<any>) => record.id,
+        );
+        const parsedUrl = new URL(
+          `${req.protocol}://${req.hostname}${req.url}`,
+        );
+        parsedUrl.searchParams.forEach((_value: string, key: string) => {
+          if (key === 'records[]') {
+            parsedUrl.searchParams.delete('records[]');
+          }
+        });
+        ids.forEach((id: string) => {
+          parsedUrl.searchParams.set('records[]', id);
+        });
 
-        req.url = url.format(parsedUrl);
+        req.url = parsedUrl.toString();
+        logger.debug(
+          `flattening records to IDs: ${url.format(parsedUrl.toString())}`,
+        );
         req.query.records = ids;
       }
       next();

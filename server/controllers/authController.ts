@@ -13,12 +13,12 @@ import { fetchRecordsByIds, requestOptions, routes } from '../utils/airtable';
 import logger from '../utils/logger';
 
 const request = util.promisify(_request);
-const TOKEN_EXPIRATION_TIME = '1d';
 
 export default (
   opts: AirlockOptions,
 ): AirlockController<{
   login: {};
+  logout: {};
   register: {};
   checkForExistingUser: {};
   verifyToken: {};
@@ -29,6 +29,7 @@ export default (
     airtablePasswordColumn,
     airtableUserTableName,
     disableHashPassword,
+    expirationDuration,
     saltRounds,
     publicKey,
     privateKey,
@@ -40,7 +41,7 @@ export default (
       privateKey,
       {
         algorithm: 'RS256',
-        expiresIn: TOKEN_EXPIRATION_TIME,
+        expiresIn: expirationDuration,
       },
     );
   }
@@ -50,7 +51,7 @@ export default (
       httpOnly: true,
       domain: req.hostname,
       path: '/',
-      expires: new Date(Date.now() + ms(TOKEN_EXPIRATION_TIME)),
+      expires: new Date(Date.now() + ms(expirationDuration)),
     });
     res.json({
       success: true,
@@ -140,6 +141,11 @@ export default (
         return next(err);
       }
       sendToken(req, res, token);
+    },
+
+    async logout(_req, res) {
+      res.cookie('airlock_token', '', { expires: new Date(Date.now()) });
+      res.json({ success: true });
     },
 
     async checkForExistingUser(req, _res, next) {
