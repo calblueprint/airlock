@@ -19,7 +19,10 @@ import validators from './validators';
 export type AirlockAccessResolver = (
   record: Airtable.Record<object>,
   user: Airtable.Record<object>,
-) => Promise<boolean>;
+) =>
+  | boolean
+  | Airtable.Record<object>
+  | Promise<boolean | Airtable.Record<object>>;
 
 export type AirlockInitOptions = {
   server?: express.Application;
@@ -283,3 +286,4 @@ class Airlock {
 }
 
 export default Airlock;
+export * from './utils/accessResolvers';

@@ -47,21 +47,62 @@ export default (
     if (!('records' in payload)) {
       payload = { records: [payload] };
     }
-    const hasAccess: boolean[] = await Promise.all(
-      payload.records.map((record: Record<any>) =>
-        accessResolver(record, authenticatedUser),
-      ),
+    const filteredAndTransformedRecords: (Record<
+      any
+    > | null)[] = await Promise.all(
+      payload.records.map((record: Record<any>) => {
+        return new Promise<Record<any> | null>((resolve) => {
+          let accessResolverResult = accessResolver(record, authenticatedUser);
+          if (!(accessResolverResult instanceof Promise)) {
+            accessResolverResult = Promise.resolve(accessResolverResult);
+          }
+          accessResolverResult
+            .then((result: boolean | Record<object>) => {
+              if (typeof result === 'boolean') {
+                if (result) {
+                  resolve(record);
+                } else {
+                  logger.debug(
+                    `Access resolver for ${
+                      operationContext.tableName
+                    } prevented a ${
+                      operationContext.type
+                    } for record: ${JSON.stringify(record)}`,
+                  );
+                  resolve(null);
+                }
+              } else {
+                logger.debug(
+                  `Access resolver for ${
+                    operationContext.tableName
+                  } transformed a record from ${JSON.stringify(
+                    record,
+                  )} to [${typeof result}: ${JSON.stringify(result)}]`,
+                );
+                resolve(result);
+              }
+            })
+            .catch((err: any) => {
+              logger.warn(
+                `An error was thrown: ${err} running access resolver for ${JSON.stringify(
+                  record,
+                )} with authenticated user ${JSON.stringify(
+                  authenticatedUser,
+                )}. Denying access by default.`,
+              );
+              resolve(null);
+            });
+        });
+      }),
     );
     payload = {
-      records: payload.records.filter((record: Record<any>, index: number) => {
-        !hasAccess[index] &&
-          logger.debug(
-            `Access resolver for ${operationContext.tableName} prevented a ${
-              operationContext.type
-            } for record: ${JSON.stringify(record)}`,
-          );
-        return hasAccess[index];
-      }),
+      records: filteredAndTransformedRecords.filter(
+        (record: Record<any> | null) =>
+          record !== null &&
+          typeof record === 'object' &&
+          record.id &&
+          record.fields,
+      ),
     };
 
     return hasMultipleRecords ? payload : payload.records[0];
