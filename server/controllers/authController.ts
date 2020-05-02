@@ -105,7 +105,6 @@ export default (
         return next(err);
       }
 
-      let newUser: Record<any>;
       try {
         const {
           body: { error: err, ...user },
@@ -129,14 +128,14 @@ export default (
         if (err) {
           throw err;
         }
-        newUser = user;
+        req.user = user;
       } catch (err) {
         return next(err);
       }
 
       let token: string;
       try {
-        token = createToken(newUser);
+        token = createToken(req.user);
       } catch (err) {
         return next(err);
       }
