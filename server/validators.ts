@@ -22,13 +22,13 @@ export default {
       );
     }
   },
-  airtableApiKey: (apiKey: string) => {
-    if (!apiKey || !apiKey.trim()) {
+  airtableApiKey: (apiKeys: string[]) => {
+    if (apiKeys.length === 0) {
       throw new Error('No Airtable API key was specified');
     }
-    if (!apiKey.startsWith('key')) {
+    if (!apiKeys.some((apiKey: string) => apiKey.startsWith('key'))) {
       throw new Error(
-        'Malformatted Airtable API key. It should begin with `key`.',
+        'Found malformatted Airtable API key. It should begin with `key`.',
       );
     }
   },

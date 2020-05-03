@@ -1,40 +1,67 @@
 require('dotenv').config();
 
+import Airtable from 'airtable';
 import bodyParser from 'body-parser';
+import cookieParser from 'cookie-parser';
 import fs from 'fs';
 import express from 'express';
 import { ParamsDictionary } from 'express-serve-static-core';
 import http from 'http';
 import path from 'path';
 
+import AccessController from './controllers/accessController';
 import AuthController from './controllers/authController';
 import ProxyController from './controllers/proxyController';
 import { AuthorizationError, InputError } from './lib/errors';
 import logger from './utils/logger';
 import validators from './validators';
 
+export type AirlockAccessResolver = (
+  record: Airtable.Record<object>,
+  user: Airtable.Record<object>,
+) =>
+  | boolean
+  | Airtable.Record<object>
+  | Promise<boolean | Airtable.Record<object>>;
+
 export type AirlockInitOptions = {
   server?: express.Application;
   port?: number;
+  allowedOrigins?: string[];
   configDir?: string;
   resolversDir?: string;
   disableHashPassword?: boolean;
   saltRounds?: number;
-  airtableApiKey: string;
+  /**
+   * Pass in a duration string accepted by zeit/ms, i.e. "30d"
+   */
+  expirationDuration?: string;
+  /**
+   * Specify an array of API keys for this field to rotate across a set of keys per request.
+   */
+  airtableApiKey: string | string[];
   airtableBaseId: string;
   airtableUserTableName: string;
   airtableUsernameColumn: string;
   airtablePasswordColumn: string;
 };
-export type AirlockOptions = Required<Omit<AirlockInitOptions, 'server'>> & {
+
+export type AirlockOptions = Required<
+  Omit<AirlockInitOptions, 'server' | 'airtableApiKey'>
+> & {
+  airtableApiKey: string[];
+  apiKeyIndex: number;
   publicKey: string;
   privateKey: string;
+  accessResolvers: Record<string, AirlockAccessResolver>;
 };
+
 export type AirlockController<
   T extends { [actionName: string]: ParamsDictionary }
 > = {
   [K in keyof T]: express.RequestHandler<T[K]>;
 };
+
 type AirlockOptionStatus = { valid: boolean; reasons?: any[] };
 
 class Airlock {
@@ -47,6 +74,37 @@ class Airlock {
   > = validators;
 
   constructor(opts: AirlockInitOptions) {
+    let { server, airtableApiKey, ...options } = opts;
+    if (!Array.isArray(airtableApiKey)) {
+      airtableApiKey = [airtableApiKey];
+    }
+
+    // Set defaults for config, if they aren't set
+    this.options = {
+      port: Number(process.env.PORT) || 4000,
+      publicKey: '',
+      privateKey: '',
+      airtableApiKey,
+      apiKeyIndex: 0,
+      expirationDuration: '14d',
+      disableHashPassword: false,
+      saltRounds: 5,
+      configDir: 'config',
+      resolversDir: 'resolvers',
+      accessResolvers: {},
+      allowedOrigins: [],
+      ...options,
+    };
+    this.options.resolversDir = path.resolve(
+      process.cwd(),
+      this.options.resolversDir,
+    );
+    this.options.configDir = path.resolve(
+      process.cwd(),
+      this.options.configDir,
+    );
+    this.options.accessResolvers = require(this.options.resolversDir);
+
     const { PUBLIC_KEY, PRIVATE_KEY } = process.env;
     if (PUBLIC_KEY) {
       fs.writeFileSync(
@@ -60,19 +118,6 @@ class Airlock {
         PRIVATE_KEY,
       );
     }
-
-    const { server, ...options } = opts;
-    this.options = {
-      port: Number(process.env.PORT) || 4000,
-      resolversDir: path.resolve(process.cwd(), 'resolvers'),
-      configDir: path.resolve(process.cwd(), 'config'),
-      publicKey: '',
-      privateKey: '',
-      disableHashPassword: false,
-      saltRounds: 5,
-      ...options,
-    };
-
     const status: AirlockOptionStatus = this.validateOptions();
     if (!status.valid) {
       logger.error('⚠️ Airlock could not start:', status.reasons);
@@ -82,6 +127,8 @@ class Airlock {
     this.options = { ...this.options, ...this.readConfigFiles() };
     if (!server) {
       this.createServer();
+    } else {
+      this.server = server;
     }
     this.mountAirlock();
   }
@@ -132,9 +179,30 @@ class Airlock {
     const app: express.Application = this.server;
     const authController = AuthController(this.options);
     const proxyController = ProxyController(this.options);
+    const accessController = AccessController(this.options);
 
     app.use((req, res, next) => {
-      res.header('Access-Control-Allow-Origin', '*');
+      if (this.options.allowedOrigins.length === 0) {
+        // Permit all, if allowedOrigins is unspecified
+        res.header('Access-Control-Allow-Origin', '*');
+      } else {
+        if (this.options.allowedOrigins.includes(req.get('origin'))) {
+          res.header('Access-Control-Allow-Origin', req.get('origin'));
+          res.header('Access-Control-Allow-Credentials', 'true');
+        } else {
+          // In case the Origin header is unspecified, we'll use the first
+          // allowed origin for the CORS header
+          res.header(
+            'Access-Control-Allow-Origin',
+            this.options.allowedOrigins[0],
+          );
+        }
+      }
+
+      res.header(
+        'Access-Control-Allow-Methods',
+        ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'].join(', '),
+      );
       res.header(
         'Access-Control-Allow-Headers',
         [
@@ -171,6 +239,7 @@ class Airlock {
 
     app.post(
       '/:version/:baseId/__airlock_logout__',
+      cookieParser(),
       bodyParser.json(),
       authController.verifyToken,
       authController.checkTokenRevocation,
@@ -178,10 +247,16 @@ class Airlock {
     );
 
     app.all(
-      '/:version/:baseId/:tableIdOrName*',
+      '/:version/:baseId/:tableName/:recordId?',
+      cookieParser(),
+      bodyParser.json(),
       authController.verifyToken,
       authController.checkTokenRevocation,
+      proxyController.hydrateRecordIds,
+      accessController.filterRequest,
+      proxyController.flattenRecordsToIds,
       proxyController.web,
+      accessController.filterResponse,
     );
 
     app.use(
@@ -210,7 +285,13 @@ class Airlock {
       },
     );
     logger.info(`🚀 Airlock mounted and running on port ${this.options.port}`);
+    if (this.options.allowedOrigins.length === 0) {
+      logger.warn(
+        `No allowedOrigins specified. Defaulting to permit all cross-origin requests.`,
+      );
+    }
   }
 }
 
 export default Airlock;
+export * from './utils/accessResolvers';

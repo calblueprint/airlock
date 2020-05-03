@@ -9,29 +9,29 @@ import util from 'util';
 
 import { AuthorizationError, InputError } from '../lib/errors';
 import { AirlockController, AirlockOptions } from '../main';
-import AirtableRoute from '../utils/AirtableRoute';
 import tokenManagement from '../utils/tokenManagement';
+import { fetchRecordsByIds, requestOptions, routes } from '../utils/airtable';
+import logger from '../utils/logger';
 
 const request = util.promisify(_request);
-const TOKEN_EXPIRATION_TIME = '1d';
 
 export default (
   opts: AirlockOptions,
 ): AirlockController<{
   login: {};
-  register: {};
   logout: {};
+  register: {};
   checkForExistingUser: {};
   verifyToken: {};
   checkTokenRevocation: {};
 }> => {
   const {
-    airtableApiKey,
     airtableBaseId,
     airtableUsernameColumn,
     airtablePasswordColumn,
     airtableUserTableName,
     disableHashPassword,
+    expirationDuration,
     saltRounds,
     publicKey,
     privateKey,
@@ -43,7 +43,7 @@ export default (
       privateKey,
       {
         algorithm: 'RS256',
-        expiresIn: TOKEN_EXPIRATION_TIME,
+        expiresIn: expirationDuration,
       },
     );
   }
@@ -51,8 +51,9 @@ export default (
   function sendToken(req: Request, res: Response, token: string): void {
     res.cookie('airlock_token', token, {
       httpOnly: true,
-      domain: req.headers.host,
-      expires: new Date(new Date() + ms(TOKEN_EXPIRATION_TIME)),
+      domain: req.hostname,
+      path: '/',
+      expires: new Date(Date.now() + ms(expirationDuration)),
     });
     res.json({
       success: true,
@@ -60,20 +61,6 @@ export default (
       user: req.user,
     });
   }
-
-  const requestOptions = {
-    json: true,
-    timeout: 5000,
-    headers: {
-      authorization: `Bearer ${airtableApiKey}`,
-      'x-api-version': '0.1.0',
-      'x-airtable-application-id': airtableBaseId,
-      'User-Agent': 'Airtable.js/0.7.1',
-    },
-    agentOptions: {
-      rejectUnauthorized: false,
-    },
-  };
 
   return {
     async login(req, res, next) {
@@ -120,12 +107,11 @@ export default (
         return next(err);
       }
 
-      let newUser: Record<any>;
       try {
         const {
           body: { error: err, ...user },
         } = await request({
-          url: AirtableRoute.users({
+          url: routes.users({
             airtableBaseId,
             airtableUserTableName,
           }),
@@ -139,26 +125,28 @@ export default (
               }`,
             },
           },
-          ...requestOptions,
+          ...requestOptions(opts),
         });
         if (err) {
           throw err;
         }
-        newUser = user;
+        req.user = user;
       } catch (err) {
         return next(err);
       }
 
       let token: string;
       try {
-        token = createToken(newUser);
+        token = createToken(req.user);
       } catch (err) {
         return next(err);
       }
       sendToken(req, res, token);
     },
     async logout(req, res) {
-      let token = req.headers['token'];
+      let token =
+        (req.headers.token as string) || (req.cookies.airlock_token as string);
+      logger.debug(`Token value is: ${token}`);
       if (token) {
         let value = await tokenManagement.isTokenRevoked(token);
         if (value != null) {
@@ -173,6 +161,7 @@ export default (
             revocationDate.toString(),
           );
           if (status == 'OK') {
+            res.cookie('airlock_token', '', { expires: new Date(Date.now()) });
             return res.json({
               success: true,
               message: 'User successfully logged out',
@@ -187,23 +176,22 @@ export default (
       } else {
         return res.json({
           success: false,
-          message: 'Authorization token is not supplied',
+          message: 'Authorization token not supplied',
         });
       }
     },
-
     async checkForExistingUser(req, _res, next) {
       if (!req.body || !req.body.username) {
         return next();
       }
       const username = req.body.username;
-      const queryUserUrl = AirtableRoute.users(
+      const queryUserUrl = routes.users(
         {
           airtableBaseId,
           airtableUserTableName,
         },
         {
-          filterByFormula: `${airtableUsernameColumn}="${username}"`,
+          filterByFormula: `{${airtableUsernameColumn}}="${username}"`,
         },
       );
 
@@ -214,7 +202,7 @@ export default (
         } = await request({
           url: queryUserUrl,
           method: 'GET',
-          ...requestOptions,
+          ...requestOptions(opts),
         });
         if (error || statusCode !== 200) {
           throw new Error(
@@ -231,20 +219,33 @@ export default (
     },
 
     verifyToken(req, _res, next) {
-      let token = req.headers.token as string;
+      let token =
+        (req.headers.token as string) || (req.cookies.airlock_token as string);
+
       if (token) {
-        jwt.verify(token, publicKey, (err, _decoded) => {
+        jwt.verify(token, publicKey, (err, decoded) => {
           if (err) {
             return next(new AuthorizationError('Invalid token supplied'));
           }
-          return next();
+          fetchRecordsByIds(
+            [(decoded as Record<any>).id],
+            opts.airtableUserTableName,
+            opts,
+          )
+            .then(([user]) => {
+              req.user = user;
+              logger.debug(`Authenticated user: ${JSON.stringify(req.user)}`);
+              next();
+            })
+            .catch((err) => next(err));
         });
       } else {
         return next(new InputError('No token supplied'));
       }
     },
     async checkTokenRevocation(req, res, next) {
-      let token = req.headers['token'];
+      let token =
+        (req.headers.token as string) || (req.cookies.airlock_token as string);
       if (token) {
         let value = await tokenManagement.isTokenRevoked(token);
         if (value != null) {
