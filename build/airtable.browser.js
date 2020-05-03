@@ -249,6 +249,9 @@ Base.prototype._getLocalStorage = function (_key) {
 };
 
 if (isReactNative) {
+  console.log(
+    "@calblueprint/airlock initialized for React Native. Tokens will be stored in AsyncStorage."
+  );
   const AsyncStorage = require("react-native").AsyncStorage;
   Base.prototype._setLocalStorage = function (key, value) {
     return AsyncStorage.setItem(key, JSON.stringify(value));
@@ -285,7 +288,7 @@ Base.prototype.getUsername = function () {
 
 Base.prototype.getToken = function () {
   if (this._token) {
-    return this._token;
+    return Promise.resolve(this._token);
   }
   return this._getLocalStorage("airlock_token");
 };
@@ -463,7 +466,7 @@ function objectToQueryParamString(obj) {
 module.exports = objectToQueryParamString;
 
 },{"lodash/forEach":163,"lodash/isArray":169,"lodash/isNil":175}],8:[function(require,module,exports){
-module.exports = "0.7.3";
+module.exports = "0.7.4";
 
 },{}],9:[function(require,module,exports){
 "use strict";
