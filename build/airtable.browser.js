@@ -1,185 +1,325 @@
 require=(function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
-'use strict';
+"use strict";
 
 function AirtableError(error, message, statusCode) {
-    this.error = error;
-    this.message = message;
-    this.statusCode = statusCode;
+  this.error = error;
+  this.message = message;
+  this.statusCode = statusCode;
 }
 
-AirtableError.prototype.toString = function() {
-    return [
-        this.message,
-        '(', this.error, ')',
-        this.statusCode ? '[Http code ' + this.statusCode + ']' : ''
-    ].join('');
+AirtableError.prototype.toString = function () {
+  return [
+    this.message,
+    "(",
+    this.error,
+    ")",
+    this.statusCode ? "[Http code " + this.statusCode + "]" : "",
+  ].join("");
 };
 
 module.exports = AirtableError;
 
 },{}],2:[function(require,module,exports){
-'use strict';
+"use strict";
 
-var forEach = require('lodash/forEach');
+var forEach = require("lodash/forEach");
 
-var AirtableError = require('./airtable_error');
-var Table = require('./table');
-var runAction = require('./run_action');
-var callbackToPromise = require('./callback_to_promise');
+var AirtableError = require("./airtable_error");
+var Table = require("./table");
+var runAction = require("./run_action");
+var callbackToPromise = require("./callback_to_promise");
+
+const isReactNative =
+  typeof document != "undefined" &&
+  typeof navigator != "undefined" &&
+  navigator.product == "ReactNative";
 
 function Base(airtable, baseId) {
-    this._airtable = airtable;
-    this._id = baseId;
-    this._user = this._getLocalStorage('user');
-    this._token = this._getLocalStorage('token');
-    this.register = callbackToPromise(this.register, this);
-    this.login = callbackToPromise(this.login, this);
-    this.logout = callbackToPromise(this.logout, this);
+  this._airtable = airtable;
+  this._id = baseId;
+  this._user = this._getLocalStorage("user");
+  this._token = this._getLocalStorage("token");
+  this.register = callbackToPromise(this.register, this);
+  this.login = callbackToPromise(this.login, this);
+  this.logout = callbackToPromise(this.logout, this);
 }
 
-Base.prototype.table = function(tableName) {
-    return new Table(this, null, tableName);
+Base.prototype.table = function (tableName) {
+  return new Table(this, null, tableName);
 };
 
-Base.prototype.runAction = function(method, path, queryParams, bodyData, callback) {
-    runAction(this, method, path, queryParams, bodyData, callback, 0);
+Base.prototype.runAction = function (
+  method,
+  path,
+  queryParams,
+  bodyData,
+  callback
+) {
+  runAction(this, method, path, queryParams, bodyData, callback, 0);
 };
 
-Base.prototype._checkStatusForError = function(statusCode, body) {
-    if (statusCode === 401) {
-        return new AirtableError('AUTHENTICATION_REQUIRED', 'You should provide valid api key to perform this operation', statusCode);
-    } else if (statusCode === 400 || statusCode === 403) {
-        return new AirtableError('NOT_AUTHORIZED', 'You are not authorized to perform this operation', statusCode);
-    } else if (statusCode === 404) {
-        return (function() {
-            var message = (body && body.error && body.error.message) ? body.error.message : 'Could not find what you are looking for';
-            return new AirtableError('NOT_FOUND', message, statusCode);
-        })();
-    } else if (statusCode === 413) {
-        return new AirtableError('REQUEST_TOO_LARGE', 'Request body is too large', statusCode);
-    } else if (statusCode === 422) {
-        return (function() {
-            var type = (body && body.error && body.error.type) ? body.error.type : 'UNPROCESSABLE_ENTITY';
-            var message = (body && body.error && body.error.message) ? body.error.message : 'The operation cannot be processed';
-            return new AirtableError(type, message, statusCode);
-        })();
-    } else if (statusCode === 429) {
-        return new AirtableError('TOO_MANY_REQUESTS', 'You have made too many requests in a short period of time. Please retry your request later', statusCode);
-    } else if (statusCode === 500) {
-        return new AirtableError('SERVER_ERROR', 'Try again. If the problem persists, contact support.', statusCode);
-    } else if (statusCode === 503) {
-        return new AirtableError('SERVICE_UNAVAILABLE', 'The service is temporarily unavailable. Please retry shortly.', statusCode);
-    } else if (statusCode >= 400) {
-        return (function() {
-            var type = (body && body.error && body.error.type) ? body.error.type : 'UNEXPECTED_ERROR';
-            var message = (body && body.error && body.error.message) ? body.error.message : 'An unexpected error occurred';
-            return new AirtableError(type, message, statusCode);
-        })();
-    } else {
-        return null;
-    }
+Base.prototype._checkStatusForError = function (statusCode, body) {
+  if (statusCode === 401) {
+    return new AirtableError(
+      "AUTHENTICATION_REQUIRED",
+      "You should provide valid api key to perform this operation",
+      statusCode
+    );
+  } else if (statusCode === 400 || statusCode === 403) {
+    return new AirtableError(
+      "NOT_AUTHORIZED",
+      "You are not authorized to perform this operation",
+      statusCode
+    );
+  } else if (statusCode === 404) {
+    return (function () {
+      var message =
+        body && body.error && body.error.message
+          ? body.error.message
+          : "Could not find what you are looking for";
+      return new AirtableError("NOT_FOUND", message, statusCode);
+    })();
+  } else if (statusCode === 413) {
+    return new AirtableError(
+      "REQUEST_TOO_LARGE",
+      "Request body is too large",
+      statusCode
+    );
+  } else if (statusCode === 422) {
+    return (function () {
+      var type =
+        body && body.error && body.error.type
+          ? body.error.type
+          : "UNPROCESSABLE_ENTITY";
+      var message =
+        body && body.error && body.error.message
+          ? body.error.message
+          : "The operation cannot be processed";
+      return new AirtableError(type, message, statusCode);
+    })();
+  } else if (statusCode === 429) {
+    return new AirtableError(
+      "TOO_MANY_REQUESTS",
+      "You have made too many requests in a short period of time. Please retry your request later",
+      statusCode
+    );
+  } else if (statusCode === 500) {
+    return new AirtableError(
+      "SERVER_ERROR",
+      "Try again. If the problem persists, contact support.",
+      statusCode
+    );
+  } else if (statusCode === 503) {
+    return new AirtableError(
+      "SERVICE_UNAVAILABLE",
+      "The service is temporarily unavailable. Please retry shortly.",
+      statusCode
+    );
+  } else if (statusCode >= 400) {
+    return (function () {
+      var type =
+        body && body.error && body.error.type
+          ? body.error.type
+          : "UNEXPECTED_ERROR";
+      var message =
+        body && body.error && body.error.message
+          ? body.error.message
+          : "An unexpected error occurred";
+      return new AirtableError(type, message, statusCode);
+    })();
+  } else {
+    return null;
+  }
 };
 
-Base.prototype.register = function({username, password, fields}, done) {
-    if (!username) {
-        throw new AirtableError('NOT_FOUND', "Missing parameter 'username' required for Base#register", 404);
+Base.prototype.register = function ({ username, password, fields }, done) {
+  if (!username) {
+    throw new AirtableError(
+      "NOT_FOUND",
+      "Missing parameter 'username' required for Base#register",
+      404
+    );
+  }
+  if (!password) {
+    throw new AirtableError(
+      "NOT_FOUND",
+      "Missing parameter 'password' required for Base#register",
+      404
+    );
+  }
+  if (this._airtable._endpointUrl.includes("https://api.airtable.com")) {
+    throw new AirtableError(
+      "NOT_AUTHORIZED",
+      "Base#register cannot be used with api.airtable.com. Please configure this Airlock client to use an Airlock endpoint URL.",
+      403
+    );
+  }
+  runAction(
+    this,
+    "post",
+    "/__airlock_register__",
+    {},
+    { username, password, fields },
+    (err, data) => {
+      this._user = data.body.user;
+      this._token = data.body.token;
+      Promise.all([
+        this._setLocalStorage("airlock_user", this._user),
+        this._setLocalStorage("airlock_token", this._token),
+      ])
+        .then(() => {
+          done(err, data);
+        })
+        .catch((err) => done(err));
     }
-    if (!password) {
-        throw new AirtableError('NOT_FOUND', "Missing parameter 'password' required for Base#register", 404);
+  );
+};
+
+Base.prototype.login = function ({ username, password }, done) {
+  if (!username) {
+    throw new AirtableError(
+      "NOT_FOUND",
+      "Missing parameter 'username' required for Base#login",
+      404
+    );
+  }
+  if (!password) {
+    throw new AirtableError(
+      "NOT_FOUND",
+      "Missing parameter 'password' required for Base#login",
+      404
+    );
+  }
+  if (this._airtable._endpointUrl.includes("https://api.airtable.com")) {
+    throw new AirtableError(
+      "NOT_AUTHORIZED",
+      "Base#login cannot be used with api.airtable.com. Please configure this Airlock client to use an Airlock endpoint URL.",
+      403
+    );
+  }
+  runAction(
+    this,
+    "post",
+    "/__airlock_login__",
+    {},
+    { username, password },
+    (err, data) => {
+      this._user = data.body.user;
+      this._token = data.body.token;
+      Promise.all([
+        this._setLocalStorage("airlock_user", this._user),
+        this._setLocalStorage("airlock_token", this._token),
+      ])
+        .then(() => {
+          done(err, data);
+        })
+        .catch((err) => done(err));
     }
-    if (this._airtable._endpointUrl.includes('https://api.airtable.com')) {
-        throw new AirtableError('NOT_AUTHORIZED', 'Base#register cannot be used with api.airtable.com. Please configure this Airlock client to use an Airlock endpoint URL.', 403);
-    }
-    runAction(this, 'post', '/__airlock_register__', {}, {username, password, fields}, (err, data) => {
-        this._user = data.body.user;
-        this._token = data.body.token;
+  );
+};
+
+Base.prototype.logout = function (done) {
+  if (this._airtable._endpointUrl.includes("https://api.airtable.com")) {
+    throw new AirtableError(
+      "NOT_AUTHORIZED",
+      "Base#logout cannot be used with api.airtable.com. Please configure this Airlock client to use an Airlock endpoint URL.",
+      403
+    );
+  }
+  this._user = null;
+  this._token = null;
+  runAction(this, "post", "/__airlock_logout__", {}, {}, (err, data) => {
+    Promise.all([
+      this._setLocalStorage("airlock_user", ""),
+      this._setLocalStorage("airlock_token", ""),
+    ])
+      .then(() => {
         done(err, data);
+      })
+      .catch((err) => done(err));
+  });
+};
+
+Base.prototype._setLocalStorage = function (_key, _value) {
+  // setLocalStorage is a no-op in this context
+};
+
+Base.prototype._getLocalStorage = function (_key) {
+  // getLocalStorage is a no-op in this context
+};
+
+if (isReactNative) {
+  const AsyncStorage = require("react-native").AsyncStorage;
+  Base.prototype._setLocalStorage = function (key, value) {
+    return AsyncStorage.setItem(key, JSON.stringify(value));
+  };
+
+  Base.prototype._getLocalStorage = function (key) {
+    return AsyncStorage.getItem(key).then((value) => {
+      return JSON.parse(value);
     });
+  };
+}
+
+Base.prototype.doCall = function (tableName) {
+  return this.table(tableName);
 };
 
-Base.prototype.login = function({username, password}, done) {
-    if (!username) {
-        throw new AirtableError('NOT_FOUND', "Missing parameter 'username' required for Base#login", 404);
-    }
-    if (!password) {
-        throw new AirtableError('NOT_FOUND', "Missing parameter 'password' required for Base#login", 404);
-    }
-    if (this._airtable._endpointUrl.includes('https://api.airtable.com')) {
-        throw new AirtableError('NOT_AUTHORIZED', 'Base#login cannot be used with api.airtable.com. Please configure this Airlock client to use an Airlock endpoint URL.', 403);
-    }
-    runAction(this, 'post', '/__airlock_login__', {}, {username, password}, (err, data) => {
-        this._user = data.body.user;
-        this._token = data.body.token;
-        done(err, data);
-    });
+Base.prototype.getId = function () {
+  return this._id;
 };
 
-
-Base.prototype.logout = function(done) {
-    if (this._airtable._endpointUrl.includes('https://api.airtable.com')) {
-        throw new AirtableError('NOT_AUTHORIZED', 'Base#logout cannot be used with api.airtable.com. Please configure this Airlock client to use an Airlock endpoint URL.', 403);
-    }
-    this._user = null;
-    this._token = null;
-    runAction(this, 'post', '/__airlock_logout__', {}, {}, (err, data) => {
-        this._user = data.body.user;
-        this._token = data.body.token;
-        done(err, data);
-    });
-};
-
-Base.prototype._setLocalStorage = function(key, value) {
-    localStorage.setItem(key, JSON.stringify(value));
-};
-
-Base.prototype._getLocalStorage = function(key) {
-    let value = localStorage.getItem(key) || null;
-    return value ? JSON.parse(value) : null;
-};
-
-Base.prototype.doCall = function(tableName) {
-    return this.table(tableName);
-};
-
-Base.prototype.getId = function() {
-    return this._id;
-};
-
-Base.prototype.getUser = function() {
+Base.prototype.getUser = function () {
+  if (this._user) {
     return this._user;
+  }
+  return this._getLocalStorage("airlock_user");
 };
 
-Base.prototype.getUsername = function() {
-    if (this._token === null || this._user === null) {
-        return null;
-    }
-    return this._user.username;
+Base.prototype.getUsername = function () {
+  if (this._token === null || this._user === null) {
+    return null;
+  }
+  return this._user.username;
 };
 
-Base.prototype.getToken = function() {
-    if (this._token === null) {
-        return null;
-    }
+Base.prototype.getToken = function () {
+  if (this._token) {
     return this._token;
+  }
+  return this._getLocalStorage("airlock_token");
 };
 
-Base.createFunctor = function(airtable, baseId) {
-    var base = new Base(airtable, baseId);
-    var baseFn = function() {
-        return base.doCall.apply(base, arguments);
-    };
-    forEach(['table', 'runAction', 'getId', 'register', 'login', 'logout', 'getUser', 'getUsername', 'getToken'], function(baseMethod) {
-        baseFn[baseMethod] = base[baseMethod].bind(base);
-    });
-    baseFn._base = base;
-    baseFn.tables = base.tables;
-    return baseFn;
+Base.createFunctor = function (airtable, baseId) {
+  var base = new Base(airtable, baseId);
+  var baseFn = function () {
+    return base.doCall.apply(base, arguments);
+  };
+  forEach(
+    [
+      "table",
+      "runAction",
+      "getId",
+      "register",
+      "login",
+      "logout",
+      "getUser",
+      "getUsername",
+      "getToken",
+    ],
+    function (baseMethod) {
+      baseFn[baseMethod] = base[baseMethod].bind(base);
+    }
+  );
+  baseFn._base = base;
+  baseFn.tables = base.tables;
+  return baseFn;
 };
 
 module.exports = Base;
 
-},{"./airtable_error":1,"./callback_to_promise":3,"./run_action":11,"./table":12,"lodash/forEach":163}],3:[function(require,module,exports){
-'use strict';
+},{"./airtable_error":1,"./callback_to_promise":3,"./run_action":11,"./table":12,"lodash/forEach":163,"react-native":"react-native"}],3:[function(require,module,exports){
+"use strict";
 
 /**
  * Given a function fn that takes a callback as its last argument, returns
@@ -188,44 +328,44 @@ module.exports = Base;
  * function will return a promise instead.
  */
 function callbackToPromise(fn, context, callbackArgIndex) {
-    return function() {
-        var thisCallbackArgIndex;
-        if (callbackArgIndex === void 0) {
-            thisCallbackArgIndex = arguments.length > 0 ? arguments.length - 1 : 0;
-        } else {
-            thisCallbackArgIndex = callbackArgIndex;
-        }
-        var callbackArg = arguments[thisCallbackArgIndex];
-        if (typeof callbackArg === 'function') {
-            fn.apply(context, arguments);
-            return void 0;
-        } else {
-            var args = [];
-            // If an explicit callbackArgIndex is set, but the function is called
-            // with too few arguments, we want to push undefined onto args so that
-            // our constructed callback ends up at the right index.
-            var argLen = Math.max(arguments.length, thisCallbackArgIndex);
-            for (var i = 0; i < argLen; i++) {
-                args.push(arguments[i]);
-            }
-            return new Promise(function(resolve, reject) {
-                args.push(function(err, result) {
-                    if (err) {
-                        reject(err);
-                    } else {
-                        resolve(result);
-                    }
-                });
-                fn.apply(context, args);
-            });
-        }
-    };
+  return function () {
+    var thisCallbackArgIndex;
+    if (callbackArgIndex === void 0) {
+      thisCallbackArgIndex = arguments.length > 0 ? arguments.length - 1 : 0;
+    } else {
+      thisCallbackArgIndex = callbackArgIndex;
+    }
+    var callbackArg = arguments[thisCallbackArgIndex];
+    if (typeof callbackArg === "function") {
+      fn.apply(context, arguments);
+      return void 0;
+    } else {
+      var args = [];
+      // If an explicit callbackArgIndex is set, but the function is called
+      // with too few arguments, we want to push undefined onto args so that
+      // our constructed callback ends up at the right index.
+      var argLen = Math.max(arguments.length, thisCallbackArgIndex);
+      for (var i = 0; i < argLen; i++) {
+        args.push(arguments[i]);
+      }
+      return new Promise(function (resolve, reject) {
+        args.push(function (err, result) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(result);
+          }
+        });
+        fn.apply(context, args);
+      });
+    }
+  };
 }
 
 module.exports = callbackToPromise;
 
 },{}],4:[function(require,module,exports){
-'use strict';
+"use strict";
 
 var didWarnForDeprecation = {};
 
@@ -241,128 +381,133 @@ var didWarnForDeprecation = {};
  * @return a wrapped function
  */
 function deprecate(fn, key, message) {
-    return function() {
-        if (!didWarnForDeprecation[key]) {
-            didWarnForDeprecation[key] = true;
-            console.warn(message);
-        }
-        fn.apply(this, arguments);
-    };
+  return function () {
+    if (!didWarnForDeprecation[key]) {
+      didWarnForDeprecation[key] = true;
+      console.warn(message);
+    }
+    fn.apply(this, arguments);
+  };
 }
 
 module.exports = deprecate;
 
-
 },{}],5:[function(require,module,exports){
-'use strict';
+"use strict";
 
 function has(object, property) {
-    return Object.prototype.hasOwnProperty.call(object, property);
+  return Object.prototype.hasOwnProperty.call(object, property);
 }
 
 module.exports = has;
 
 },{}],6:[function(require,module,exports){
 module.exports={
-    "INITIAL_RETRY_DELAY_IF_RATE_LIMITED": 5000,
-    "MAX_RETRY_DELAY_IF_RATE_LIMITED": 600000
+  "INITIAL_RETRY_DELAY_IF_RATE_LIMITED": 5000,
+  "MAX_RETRY_DELAY_IF_RATE_LIMITED": 600000
 }
 
 },{}],7:[function(require,module,exports){
-'use strict';
+"use strict";
 
-var isArray = require('lodash/isArray');
-var forEach = require('lodash/forEach');
-var isNil = require('lodash/isNil');
+var isArray = require("lodash/isArray");
+var forEach = require("lodash/forEach");
+var isNil = require("lodash/isNil");
 
 // Adapted from jQuery.param:
 // https://github.com/jquery/jquery/blob/2.2-stable/src/serialize.js
 function buildParams(prefix, obj, addFn) {
-    if (isArray(obj)) {
-        // Serialize array item.
-        forEach(obj, function(value, index) {
-            if (/\[\]$/.test(prefix)) {
-                // Treat each array item as a scalar.
-                addFn(prefix, value);
-            } else {
-                // Item is non-scalar (array or object), encode its numeric index.
-                buildParams(
-                    prefix + '[' + (typeof value === 'object' && value !== null ? index : '') + ']',
-                    value,
-                    addFn
-                );
-            }
-        });
-    } else if (typeof obj === 'object') {
-        // Serialize object item.
-        forEach(obj, function(value, key) {
-            buildParams(prefix + '[' + key + ']', value, addFn);
-        });
-    } else {
-        // Serialize scalar item.
-        addFn(prefix, obj);
-    }
+  if (isArray(obj)) {
+    // Serialize array item.
+    forEach(obj, function (value, index) {
+      if (/\[\]$/.test(prefix)) {
+        // Treat each array item as a scalar.
+        addFn(prefix, value);
+      } else {
+        // Item is non-scalar (array or object), encode its numeric index.
+        buildParams(
+          prefix +
+            "[" +
+            (typeof value === "object" && value !== null ? index : "") +
+            "]",
+          value,
+          addFn
+        );
+      }
+    });
+  } else if (typeof obj === "object") {
+    // Serialize object item.
+    forEach(obj, function (value, key) {
+      buildParams(prefix + "[" + key + "]", value, addFn);
+    });
+  } else {
+    // Serialize scalar item.
+    addFn(prefix, obj);
+  }
 }
 
 function objectToQueryParamString(obj) {
-    var parts = [];
-    var addFn = function(key, value) {
-        value = isNil(value) ? '' : value;
-        parts.push(encodeURIComponent(key) + '=' + encodeURIComponent(value));
-    };
+  var parts = [];
+  var addFn = function (key, value) {
+    value = isNil(value) ? "" : value;
+    parts.push(encodeURIComponent(key) + "=" + encodeURIComponent(value));
+  };
 
-    forEach(obj, function(value, key) {
-        buildParams(key, value, addFn);
-    });
+  forEach(obj, function (value, key) {
+    buildParams(key, value, addFn);
+  });
 
-    return parts.join('&').replace(/%20/g, '+');
+  return parts.join("&").replace(/%20/g, "+");
 }
 
 module.exports = objectToQueryParamString;
 
 },{"lodash/forEach":163,"lodash/isArray":169,"lodash/isNil":175}],8:[function(require,module,exports){
-module.exports = "0.7.2";
+module.exports = "0.7.3";
 
 },{}],9:[function(require,module,exports){
-'use strict';
+"use strict";
 
-var isPlainObject = require('lodash/isPlainObject');
-var isFunction = require('lodash/isFunction');
-var isString = require('lodash/isString');
-var isNumber = require('lodash/isNumber');
-var includes = require('lodash/includes');
-var clone = require('lodash/clone');
-var forEach = require('lodash/forEach');
-var map = require('lodash/map');
-var keys = require('lodash/keys');
+var isPlainObject = require("lodash/isPlainObject");
+var isFunction = require("lodash/isFunction");
+var isString = require("lodash/isString");
+var isNumber = require("lodash/isNumber");
+var includes = require("lodash/includes");
+var clone = require("lodash/clone");
+var forEach = require("lodash/forEach");
+var map = require("lodash/map");
+var keys = require("lodash/keys");
 
-var check = require('./typecheck');
-var Record = require('./record');
-var callbackToPromise = require('./callback_to_promise');
-var has = require('./has');
+var check = require("./typecheck");
+var Record = require("./record");
+var callbackToPromise = require("./callback_to_promise");
+var has = require("./has");
 
 /**
  * Builds a query object. Won't fetch until `firstPage` or
  * or `eachPage` is called.
  */
 function Query(table, params) {
-    if (!isPlainObject(params)) {
-        throw new Error('Expected query options to be an object');
+  if (!isPlainObject(params)) {
+    throw new Error("Expected query options to be an object");
+  }
+
+  forEach(keys(params), function (key) {
+    var value = params[key];
+    if (
+      !Query.paramValidators[key] ||
+      !Query.paramValidators[key](value).pass
+    ) {
+      throw new Error("Invalid parameter for Query: " + key);
     }
+  });
 
-    forEach(keys(params), function(key) {
-        var value = params[key];
-        if (!Query.paramValidators[key] || !Query.paramValidators[key](value).pass) {
-            throw new Error('Invalid parameter for Query: ' + key);
-        }
-    });
+  this._table = table;
+  this._params = params;
 
-    this._table = table;
-    this._params = params;
-
-    this.firstPage = callbackToPromise(firstPage, this);
-    this.eachPage = callbackToPromise(eachPage, this, 1);
-    this.all = callbackToPromise(all, this);
+  this.firstPage = callbackToPromise(firstPage, this);
+  this.eachPage = callbackToPromise(eachPage, this, 1);
+  this.all = callbackToPromise(all, this);
 }
 
 /**
@@ -370,15 +515,18 @@ function Query(table, params) {
  * then calls `done(error, records)`.
  */
 function firstPage(done) {
-    if (!isFunction(done)) {
-        throw new Error('The first parameter to `firstPage` must be a function');
-    }
+  if (!isFunction(done)) {
+    throw new Error("The first parameter to `firstPage` must be a function");
+  }
 
-    this.eachPage(function(records) {
-        done(null, records);
-    }, function(error) {
-        done(error, null);
-    });
+  this.eachPage(
+    function (records) {
+      done(null, records);
+    },
+    function (error) {
+      done(error, null);
+    }
+  );
 }
 
 /**
@@ -392,109 +540,114 @@ function firstPage(done) {
  * `done(error)`.
  */
 function eachPage(pageCallback, done) {
-    if (!isFunction(pageCallback)) {
-        throw new Error('The first parameter to `eachPage` must be a function');
-    }
+  if (!isFunction(pageCallback)) {
+    throw new Error("The first parameter to `eachPage` must be a function");
+  }
 
-    if (!isFunction(done) && (done !== void 0)) {
-        throw new Error('The second parameter to `eachPage` must be a function or undefined');
-    }
+  if (!isFunction(done) && done !== void 0) {
+    throw new Error(
+      "The second parameter to `eachPage` must be a function or undefined"
+    );
+  }
 
-    var that = this;
-    var path = '/' + this._table._urlEncodedNameOrId();
-    var params = clone(this._params);
+  var that = this;
+  var path = "/" + this._table._urlEncodedNameOrId();
+  var params = clone(this._params);
 
-    var inner = function() {
-        that._table._base.runAction('get', path, params, null, function(err, response, result) {
-            if (err) {
-                done(err, null);
-            } else {
-                var next;
-                if (result.offset) {
-                    params.offset = result.offset;
-                    next = inner;
-                } else {
-                    next = function() {
-                        if (done) {
-                            done(null);
-                        }
-                    };
-                }
-
-                var records = map(result.records, function(recordJson) {
-                    return new Record(that._table, null, recordJson);
-                });
-
-                pageCallback(records, next);
+  var inner = function () {
+    that._table._base.runAction("get", path, params, null, function (
+      err,
+      response,
+      result
+    ) {
+      if (err) {
+        done(err, null);
+      } else {
+        var next;
+        if (result.offset) {
+          params.offset = result.offset;
+          next = inner;
+        } else {
+          next = function () {
+            if (done) {
+              done(null);
             }
-        });
-    };
+          };
+        }
 
-    inner();
+        var records = map(result.records, function (recordJson) {
+          return new Record(that._table, null, recordJson);
+        });
+
+        pageCallback(records, next);
+      }
+    });
+  };
+
+  inner();
 }
 
 /**
  * Fetches all pages of results asynchronously. May take a long time.
  */
 function all(done) {
-    if (!isFunction(done)) {
-        throw new Error('The first parameter to `all` must be a function');
-    }
+  if (!isFunction(done)) {
+    throw new Error("The first parameter to `all` must be a function");
+  }
 
-    var allRecords = [];
-    this.eachPage(function(pageRecords, fetchNextPage) {
-        allRecords.push.apply(allRecords, pageRecords);
-        fetchNextPage();
-    }, function(err) {
-        if (err) {
-            done(err, null);
-        } else {
-            done(null, allRecords);
-        }
-    });
+  var allRecords = [];
+  this.eachPage(
+    function (pageRecords, fetchNextPage) {
+      allRecords.push.apply(allRecords, pageRecords);
+      fetchNextPage();
+    },
+    function (err) {
+      if (err) {
+        done(err, null);
+      } else {
+        done(null, allRecords);
+      }
+    }
+  );
 }
 
 Query.paramValidators = {
-    fields:
-        check(check.isArrayOf(isString), 'the value for `fields` should be an array of strings'),
+  fields: check(
+    check.isArrayOf(isString),
+    "the value for `fields` should be an array of strings"
+  ),
 
-    filterByFormula:
-        check(isString, 'the value for `filterByFormula` should be a string'),
+  filterByFormula: check(
+    isString,
+    "the value for `filterByFormula` should be a string"
+  ),
 
-    maxRecords:
-        check(isNumber, 'the value for `maxRecords` should be a number'),
+  maxRecords: check(isNumber, "the value for `maxRecords` should be a number"),
 
-    pageSize:
-        check(isNumber, 'the value for `pageSize` should be a number'),
+  pageSize: check(isNumber, "the value for `pageSize` should be a number"),
 
-    sort:
-        check(check.isArrayOf(function(obj) {
-            return (
-                isPlainObject(obj) &&
-                isString(obj.field) &&
-                ((obj.direction === void 0) || includes(['asc', 'desc'], obj.direction))
-            );
-        }), 'the value for `sort` should be an array of sort objects. ' +
-            'Each sort object must have a string `field` value, and an optional ' +
-            '`direction` value that is "asc" or "desc".'
-        ),
+  sort: check(
+    check.isArrayOf(function (obj) {
+      return (
+        isPlainObject(obj) &&
+        isString(obj.field) &&
+        (obj.direction === void 0 || includes(["asc", "desc"], obj.direction))
+      );
+    }),
+    "the value for `sort` should be an array of sort objects. " +
+      "Each sort object must have a string `field` value, and an optional " +
+      '`direction` value that is "asc" or "desc".'
+  ),
 
-    view:
-        check(isString, 'the value for `view` should be a string'),
+  view: check(isString, "the value for `view` should be a string"),
 
-    cellFormat:
-        check(function(cellFormat) {
-            return (
-                isString(cellFormat) &&
-                includes(['json', 'string'], cellFormat)
-            );
-        }, 'the value for `cellFormat` should be "json" or "string"'),
+  cellFormat: check(function (cellFormat) {
+    return isString(cellFormat) && includes(["json", "string"], cellFormat);
+  }, 'the value for `cellFormat` should be "json" or "string"'),
 
-    timeZone:
-        check(isString, 'the value for `timeZone` should be a string'),
+  timeZone: check(isString, "the value for `timeZone` should be a string"),
 
-    userLocale:
-        check(isString, 'the value for `userLocale` should be a string'),
+  userLocale: check(isString, "the value for `userLocale` should be a string"),
 };
 
 /**
@@ -506,461 +659,599 @@ Query.paramValidators = {
  *  errors: a list of error messages.
  */
 Query.validateParams = function validateParams(params) {
-    if (!isPlainObject(params)) {
-        throw new Error('Expected query params to be an object');
+  if (!isPlainObject(params)) {
+    throw new Error("Expected query params to be an object");
+  }
+
+  var validParams = {};
+  var ignoredKeys = [];
+  var errors = [];
+
+  forEach(keys(params), function (key) {
+    var value = params[key];
+    if (has(Query.paramValidators, key)) {
+      var validator = Query.paramValidators[key];
+      var validationResult = validator(value);
+      if (validationResult.pass) {
+        validParams[key] = value;
+      } else {
+        errors.push(validationResult.error);
+      }
+    } else {
+      ignoredKeys.push(key);
     }
+  });
 
-    var validParams = {};
-    var ignoredKeys = [];
-    var errors = [];
-
-    forEach(keys(params), function(key) {
-        var value = params[key];
-        if (has(Query.paramValidators, key)) {
-            var validator = Query.paramValidators[key];
-            var validationResult = validator(value);
-            if (validationResult.pass) {
-                validParams[key] = value;
-            } else {
-                errors.push(validationResult.error);
-            }
-        } else {
-            ignoredKeys.push(key);
-        }
-    });
-
-    return {
-        validParams: validParams,
-        ignoredKeys: ignoredKeys,
-        errors: errors,
-    };
+  return {
+    validParams: validParams,
+    ignoredKeys: ignoredKeys,
+    errors: errors,
+  };
 };
 
 module.exports = Query;
 
 },{"./callback_to_promise":3,"./has":5,"./record":10,"./typecheck":13,"lodash/clone":160,"lodash/forEach":163,"lodash/includes":167,"lodash/isFunction":172,"lodash/isNumber":176,"lodash/isPlainObject":179,"lodash/isString":181,"lodash/keys":184,"lodash/map":186}],10:[function(require,module,exports){
-'use strict';
+"use strict";
 
-var assign = require('lodash/assign');
+var assign = require("lodash/assign");
 
-var callbackToPromise = require('./callback_to_promise');
+var callbackToPromise = require("./callback_to_promise");
 
 function Record(table, recordId, recordJson) {
-    this._table = table;
-    this.id = recordId || recordJson.id;
-    this.setRawJson(recordJson);
+  this._table = table;
+  this.id = recordId || recordJson.id;
+  this.setRawJson(recordJson);
 
-    this.save = callbackToPromise(save, this);
-    this.patchUpdate = callbackToPromise(patchUpdate, this);
-    this.putUpdate = callbackToPromise(putUpdate, this);
-    this.destroy = callbackToPromise(destroy, this);
-    this.fetch = callbackToPromise(fetch, this);
+  this.save = callbackToPromise(save, this);
+  this.patchUpdate = callbackToPromise(patchUpdate, this);
+  this.putUpdate = callbackToPromise(putUpdate, this);
+  this.destroy = callbackToPromise(destroy, this);
+  this.fetch = callbackToPromise(fetch, this);
 
-    this.updateFields = this.patchUpdate;
-    this.replaceFields = this.putUpdate;
+  this.updateFields = this.patchUpdate;
+  this.replaceFields = this.putUpdate;
 }
 
-Record.prototype.getId = function() {
-    return this.id;
+Record.prototype.getId = function () {
+  return this.id;
 };
 
-Record.prototype.get = function(columnName) {
-    return this.fields[columnName];
+Record.prototype.get = function (columnName) {
+  return this.fields[columnName];
 };
 
-Record.prototype.set = function(columnName, columnValue) {
-    this.fields[columnName] = columnValue;
+Record.prototype.set = function (columnName, columnValue) {
+  this.fields[columnName] = columnValue;
 };
 
 function save(done) {
-    this.putUpdate(this.fields, done);
+  this.putUpdate(this.fields, done);
 }
 
 function patchUpdate(cellValuesByName, opts, done) {
-    var that = this;
-    if (!done) {
-        done = opts;
-        opts = {};
+  var that = this;
+  if (!done) {
+    done = opts;
+    opts = {};
+  }
+  var updateBody = assign(
+    {
+      fields: cellValuesByName,
+    },
+    opts
+  );
+
+  this._table._base.runAction(
+    "patch",
+    "/" + this._table._urlEncodedNameOrId() + "/" + this.id,
+    {},
+    updateBody,
+    function (err, response, results) {
+      if (err) {
+        done(err);
+        return;
+      }
+
+      that.setRawJson(results);
+      done(null, that);
     }
-    var updateBody = assign({
-        fields: cellValuesByName
-    }, opts);
-
-    this._table._base.runAction('patch', '/' + this._table._urlEncodedNameOrId() + '/' + this.id, {}, updateBody, function(err, response, results) {
-        if (err) { done(err); return; }
-
-        that.setRawJson(results);
-        done(null, that);
-    });
+  );
 }
 
 function putUpdate(cellValuesByName, opts, done) {
-    var that = this;
-    if (!done) {
-        done = opts;
-        opts = {};
-    }
-    var updateBody = assign({
-        fields: cellValuesByName
-    }, opts);
-    this._table._base.runAction('put', '/' + this._table._urlEncodedNameOrId() + '/' + this.id, {}, updateBody, function(err, response, results) {
-        if (err) { done(err); return; }
+  var that = this;
+  if (!done) {
+    done = opts;
+    opts = {};
+  }
+  var updateBody = assign(
+    {
+      fields: cellValuesByName,
+    },
+    opts
+  );
+  this._table._base.runAction(
+    "put",
+    "/" + this._table._urlEncodedNameOrId() + "/" + this.id,
+    {},
+    updateBody,
+    function (err, response, results) {
+      if (err) {
+        done(err);
+        return;
+      }
 
-        that.setRawJson(results);
-        done(null, that);
-    });
+      that.setRawJson(results);
+      done(null, that);
+    }
+  );
 }
 
 function destroy(done) {
-    var that = this;
-    this._table._base.runAction('delete', '/' + this._table._urlEncodedNameOrId() + '/' + this.id, {}, null, function(err) {
-        if (err) { done(err); return; }
+  var that = this;
+  this._table._base.runAction(
+    "delete",
+    "/" + this._table._urlEncodedNameOrId() + "/" + this.id,
+    {},
+    null,
+    function (err) {
+      if (err) {
+        done(err);
+        return;
+      }
 
-        done(null, that);
-    });
+      done(null, that);
+    }
+  );
 }
 
 function fetch(done) {
-    var that = this;
-    this._table._base.runAction('get', '/' + this._table._urlEncodedNameOrId() + '/' + this.id, {}, null, function(err, response, results) {
-        if (err) { done(err); return; }
+  var that = this;
+  this._table._base.runAction(
+    "get",
+    "/" + this._table._urlEncodedNameOrId() + "/" + this.id,
+    {},
+    null,
+    function (err, response, results) {
+      if (err) {
+        done(err);
+        return;
+      }
 
-        that.setRawJson(results);
-        done(null, that);
-    });
+      that.setRawJson(results);
+      done(null, that);
+    }
+  );
 }
 
-Record.prototype.setRawJson = function(rawJson) {
-    this._rawJson = rawJson;
-    this.fields = (this._rawJson && this._rawJson.fields) || {};
+Record.prototype.setRawJson = function (rawJson) {
+  this._rawJson = rawJson;
+  this.fields = (this._rawJson && this._rawJson.fields) || {};
 };
 
 module.exports = Record;
 
 },{"./callback_to_promise":3,"lodash/assign":159}],11:[function(require,module,exports){
-'use strict';
+"use strict";
 
-var internalConfig = require('./internal_config.json');
-var objectToQueryParamString = require('./object_to_query_param_string');
-var packageVersion = require('./package_version');
+var internalConfig = require("./internal_config.json");
+var objectToQueryParamString = require("./object_to_query_param_string");
+var packageVersion = require("./package_version");
 
 // This will become require('xhr') in the browser.
-var request = require('request');
+var request = require("request");
 
-var userAgent = 'Airtable.js/' + packageVersion;
+var userAgent = "Airtable.js/" + packageVersion;
 
 // "Full Jitter" algorithm taken from https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
-function exponentialBackoffWithJitter(numberOfRetries, initialBackoffTimeMs, maxBackoffTimeMs) {
-    var rawBackoffTimeMs = initialBackoffTimeMs * Math.pow(2, numberOfRetries);
-    var clippedBackoffTimeMs = Math.min(maxBackoffTimeMs, rawBackoffTimeMs);
-    var jitteredBackoffTimeMs = Math.random() * clippedBackoffTimeMs;
-    return jitteredBackoffTimeMs;
+function exponentialBackoffWithJitter(
+  numberOfRetries,
+  initialBackoffTimeMs,
+  maxBackoffTimeMs
+) {
+  var rawBackoffTimeMs = initialBackoffTimeMs * Math.pow(2, numberOfRetries);
+  var clippedBackoffTimeMs = Math.min(maxBackoffTimeMs, rawBackoffTimeMs);
+  var jitteredBackoffTimeMs = Math.random() * clippedBackoffTimeMs;
+  return jitteredBackoffTimeMs;
 }
 
-function runAction(base, method, path, queryParams, bodyData, callback, numAttempts) {
-    var url = base._airtable._endpointUrl + '/v' + base._airtable._apiVersionMajor + '/' + base._id + path + '?' + objectToQueryParamString(queryParams);
+function runAction(
+  base,
+  method,
+  path,
+  queryParams,
+  bodyData,
+  callback,
+  numAttempts
+) {
+  var url =
+    base._airtable._endpointUrl +
+    "/v" +
+    base._airtable._apiVersionMajor +
+    "/" +
+    base._id +
+    path +
+    "?" +
+    objectToQueryParamString(queryParams);
 
-    var headers = {
-        'authorization': 'Bearer ' + base._airtable._apiKey,
-        'x-api-version': base._airtable._apiVersion,
-        'x-airtable-application-id': base.getId(),
-    };
-    var isBrowser = typeof window !== 'undefined';
-    // Some browsers do not allow overriding the user agent.
-    // https://github.com/Airtable/airtable.js/issues/52
-    if (isBrowser) {
-        headers['x-airtable-user-agent'] = userAgent;
-    } else {
-        headers['User-Agent'] = userAgent;
+  var headers = {
+    authorization: "Bearer " + base._airtable._apiKey,
+    "x-api-version": base._airtable._apiVersion,
+    "x-airtable-application-id": base.getId(),
+  };
+  var isBrowser = typeof window !== "undefined";
+  // Some browsers do not allow overriding the user agent.
+  // https://github.com/Airtable/airtable.js/issues/52
+  if (isBrowser) {
+    headers["x-airtable-user-agent"] = userAgent;
+  } else {
+    headers["User-Agent"] = userAgent;
+  }
+  base.getToken().then((token) => {
+    if (token) {
+      headers.token = token;
     }
 
-
     var options = {
-        method: method.toUpperCase(),
-        url: url,
-        json: true,
-        timeout: base._airtable.requestTimeout,
-        headers: headers,
-        // agentOptions are ignored when running in the browser.
-        agentOptions: {
-            rejectUnauthorized: base._airtable._allowUnauthorizedSsl
-        },
+      method: method.toUpperCase(),
+      url: url,
+      json: true,
+      timeout: base._airtable.requestTimeout,
+      headers: headers,
+      // agentOptions are ignored when running in the browser.
+      agentOptions: {
+        rejectUnauthorized: base._airtable._allowUnauthorizedSsl,
+      },
     };
 
-    if (path.indexOf('__airlock')) {
-        options.withCredentials = true;
+    if (isBrowser && base._airtable._apiKey === "airlock") {
+      options.withCredentials = true;
     }
 
     if (bodyData !== null) {
-        options.body = bodyData;
+      options.body = bodyData;
     }
 
-    request(options, function(error, resp, body) {
-        if (error) {
-            callback(error, resp, body);
-            return;
-        }
-
-        if (resp.statusCode === 429 && !base._airtable._noRetryIfRateLimited) {
-            var backoffDelayMs = exponentialBackoffWithJitter(numAttempts, internalConfig.INITIAL_RETRY_DELAY_IF_RATE_LIMITED, internalConfig.MAX_RETRY_DELAY_IF_RATE_LIMITED);
-            setTimeout(function() {
-                runAction(base, method, path, queryParams, bodyData, callback, numAttempts + 1);
-            }, backoffDelayMs);
-            return;
-        }
-
-        error = base._checkStatusForError(resp.statusCode, body);
+    request(options, function (error, resp, body) {
+      if (error) {
         callback(error, resp, body);
+        return;
+      }
+
+      if (resp.statusCode === 429 && !base._airtable._noRetryIfRateLimited) {
+        var backoffDelayMs = exponentialBackoffWithJitter(
+          numAttempts,
+          internalConfig.INITIAL_RETRY_DELAY_IF_RATE_LIMITED,
+          internalConfig.MAX_RETRY_DELAY_IF_RATE_LIMITED
+        );
+        setTimeout(function () {
+          runAction(
+            base,
+            method,
+            path,
+            queryParams,
+            bodyData,
+            callback,
+            numAttempts + 1
+          );
+        }, backoffDelayMs);
+        return;
+      }
+
+      error = base._checkStatusForError(resp.statusCode, body);
+      callback(error, resp, body);
     });
+  });
 }
 
 module.exports = runAction;
 
 },{"./internal_config.json":6,"./object_to_query_param_string":7,"./package_version":8,"request":198}],12:[function(require,module,exports){
-'use strict';
+"use strict";
 
-var isArray = require('lodash/isArray');
-var isPlainObject = require('lodash/isPlainObject');
-var assign = require('lodash/assign');
-var forEach = require('lodash/forEach');
-var map = require('lodash/map');
+var isArray = require("lodash/isArray");
+var isPlainObject = require("lodash/isPlainObject");
+var assign = require("lodash/assign");
+var forEach = require("lodash/forEach");
+var map = require("lodash/map");
 
-var deprecate = require('./deprecate');
-var Query = require('./query');
-var Record = require('./record');
-var callbackToPromise = require('./callback_to_promise');
+var deprecate = require("./deprecate");
+var Query = require("./query");
+var Record = require("./record");
+var callbackToPromise = require("./callback_to_promise");
 
 function Table(base, tableId, tableName) {
-    if (!tableId && !tableName) {
-        throw new Error('Table name or table ID is required');
-    }
+  if (!tableId && !tableName) {
+    throw new Error("Table name or table ID is required");
+  }
 
-    this._base = base;
-    this.id = tableId;
-    this.name = tableName;
+  this._base = base;
+  this.id = tableId;
+  this.name = tableName;
 
-    // Public API
-    this.find = callbackToPromise(this._findRecordById, this);
-    this.select = this._selectRecords.bind(this);
-    this.create = callbackToPromise(this._createRecords, this);
-    this.update = callbackToPromise(this._updateRecords.bind(this, false), this);
-    this.replace = callbackToPromise(this._updateRecords.bind(this, true), this);
-    this.destroy = callbackToPromise(this._destroyRecord, this);
+  // Public API
+  this.find = callbackToPromise(this._findRecordById, this);
+  this.select = this._selectRecords.bind(this);
+  this.create = callbackToPromise(this._createRecords, this);
+  this.update = callbackToPromise(this._updateRecords.bind(this, false), this);
+  this.replace = callbackToPromise(this._updateRecords.bind(this, true), this);
+  this.destroy = callbackToPromise(this._destroyRecord, this);
 
-    // Deprecated API
-    this.list = deprecate(this._listRecords.bind(this),
-        'table.list',
-        'Airtable: `list()` is deprecated. Use `select()` instead.');
-    this.forEach = deprecate(this._forEachRecord.bind(this),
-        'table.forEach',
-        'Airtable: `forEach()` is deprecated. Use `select()` instead.');
+  // Deprecated API
+  this.list = deprecate(
+    this._listRecords.bind(this),
+    "table.list",
+    "Airtable: `list()` is deprecated. Use `select()` instead."
+  );
+  this.forEach = deprecate(
+    this._forEachRecord.bind(this),
+    "table.forEach",
+    "Airtable: `forEach()` is deprecated. Use `select()` instead."
+  );
 }
 
-Table.prototype._findRecordById = function(recordId, done) {
-    var record = new Record(this, recordId);
-    record.fetch(done);
+Table.prototype._findRecordById = function (recordId, done) {
+  var record = new Record(this, recordId);
+  record.fetch(done);
 };
 
-Table.prototype._selectRecords = function(params) {
-    if (params === void 0) {
-        params = {};
+Table.prototype._selectRecords = function (params) {
+  if (params === void 0) {
+    params = {};
+  }
+
+  if (arguments.length > 1) {
+    console.warn(
+      "Airtable: `select` takes only one parameter, but it was given " +
+        arguments.length +
+        " parameters. " +
+        "Use `eachPage` or `firstPage` to fetch records."
+    );
+  }
+
+  if (isPlainObject(params)) {
+    var validationResults = Query.validateParams(params);
+
+    if (validationResults.errors.length) {
+      var formattedErrors = map(validationResults.errors, function (error) {
+        return "  * " + error;
+      });
+
+      throw new Error(
+        "Airtable: invalid parameters for `select`:\n" +
+          formattedErrors.join("\n")
+      );
     }
 
-    if (arguments.length > 1) {
-        console.warn('Airtable: `select` takes only one parameter, but it was given ' +
-                arguments.length + ' parameters. ' +
-                'Use `eachPage` or `firstPage` to fetch records.');
+    if (validationResults.ignoredKeys.length) {
+      console.warn(
+        "Airtable: the following parameters to `select` will be ignored: " +
+          validationResults.ignoredKeys.join(", ")
+      );
     }
 
-    if (isPlainObject(params)) {
-        var validationResults = Query.validateParams(params);
-
-        if (validationResults.errors.length) {
-            var formattedErrors = map(validationResults.errors, function(error) {
-                return '  * ' + error;
-            });
-
-            throw new Error('Airtable: invalid parameters for `select`:\n' +
-                    formattedErrors.join('\n'));
-        }
-
-        if (validationResults.ignoredKeys.length) {
-            console.warn('Airtable: the following parameters to `select` will be ignored: ' +
-                    validationResults.ignoredKeys.join(', '));
-        }
-
-        return new Query(this, validationResults.validParams);
-    } else {
-        throw new Error('Airtable: the parameter for `select` should be a plain object or undefined.');
-    }
+    return new Query(this, validationResults.validParams);
+  } else {
+    throw new Error(
+      "Airtable: the parameter for `select` should be a plain object or undefined."
+    );
+  }
 };
 
-Table.prototype._urlEncodedNameOrId = function() {
-    return this.id || encodeURIComponent(this.name);
+Table.prototype._urlEncodedNameOrId = function () {
+  return this.id || encodeURIComponent(this.name);
 };
 
-Table.prototype._createRecords = function(recordsData, optionalParameters, done) {
-    var that = this;
-    var isCreatingMultipleRecords = isArray(recordsData);
+Table.prototype._createRecords = function (
+  recordsData,
+  optionalParameters,
+  done
+) {
+  var that = this;
+  var isCreatingMultipleRecords = isArray(recordsData);
 
-    if (!done) {
-        done = optionalParameters;
-        optionalParameters = {};
-    }
-    var requestData;
-    if (isCreatingMultipleRecords) {
-        requestData = {records: recordsData};
-    } else {
-        requestData = {fields: recordsData};
-    }
-    assign(requestData, optionalParameters);
-    this._base.runAction('post', '/' + that._urlEncodedNameOrId() + '/', {}, requestData, function(err, resp, body) {
-        if (err) { done(err); return; }
+  if (!done) {
+    done = optionalParameters;
+    optionalParameters = {};
+  }
+  var requestData;
+  if (isCreatingMultipleRecords) {
+    requestData = { records: recordsData };
+  } else {
+    requestData = { fields: recordsData };
+  }
+  assign(requestData, optionalParameters);
+  this._base.runAction(
+    "post",
+    "/" + that._urlEncodedNameOrId() + "/",
+    {},
+    requestData,
+    function (err, resp, body) {
+      if (err) {
+        done(err);
+        return;
+      }
 
-        var result;
-        if (isCreatingMultipleRecords) {
-            result = body.records.map(function(record) {
-                return new Record(that, record.id, record);
-            });
-        } else {
-            result = new Record(that, body.id, body);
-        }
-        done(null, result);
-    });
-};
-
-Table.prototype._updateRecords = function(isDestructiveUpdate, recordsDataOrRecordId, recordDataOrOptsOrDone, optsOrDone, done) {
-    var opts;
-
-    if (isArray(recordsDataOrRecordId)) {
-        var that = this;
-        var recordsData = recordsDataOrRecordId;
-        opts = isPlainObject(recordDataOrOptsOrDone) ? recordDataOrOptsOrDone : {};
-        done = optsOrDone || recordDataOrOptsOrDone;
-
-        var method = isDestructiveUpdate ? 'put' : 'patch';
-        var requestData = assign({records: recordsData}, opts);
-        this._base.runAction(method, '/' + this._urlEncodedNameOrId() + '/', {}, requestData, function(err, resp, body) {
-            if (err) { done(err); return; }
-
-            var result = body.records.map(function(record) {
-                return new Record(that, record.id, record);
-            });
-            done(null, result);
+      var result;
+      if (isCreatingMultipleRecords) {
+        result = body.records.map(function (record) {
+          return new Record(that, record.id, record);
         });
-    } else {
-        var recordId = recordsDataOrRecordId;
-        var recordData = recordDataOrOptsOrDone;
-        opts = isPlainObject(optsOrDone) ? optsOrDone : {};
-        done = done || optsOrDone;
-
-        var record = new Record(this, recordId);
-        if (isDestructiveUpdate) {
-            record.putUpdate(recordData, opts, done);
-        } else {
-            record.patchUpdate(recordData, opts, done);
-        }
+      } else {
+        result = new Record(that, body.id, body);
+      }
+      done(null, result);
     }
+  );
 };
 
-Table.prototype._destroyRecord = function(recordIdsOrId, done) {
-    if (isArray(recordIdsOrId)) {
-        var that = this;
-        var queryParams = {records: recordIdsOrId};
-        this._base.runAction('delete', '/' + this._urlEncodedNameOrId(), queryParams, null, function(err, response, results) {
-            if (err) {
-                done(err);
-                return;
-            }
+Table.prototype._updateRecords = function (
+  isDestructiveUpdate,
+  recordsDataOrRecordId,
+  recordDataOrOptsOrDone,
+  optsOrDone,
+  done
+) {
+  var opts;
 
-            var records = map(results.records, function(recordJson) {
-                return new Record(that, recordJson.id, null);
-            });
-            done(null, records);
-        });
-    } else {
-        var record = new Record(this, recordIdsOrId);
-        record.destroy(done);
-    }
-};
-
-Table.prototype._listRecords = function(limit, offset, opts, done) {
+  if (isArray(recordsDataOrRecordId)) {
     var that = this;
+    var recordsData = recordsDataOrRecordId;
+    opts = isPlainObject(recordDataOrOptsOrDone) ? recordDataOrOptsOrDone : {};
+    done = optsOrDone || recordDataOrOptsOrDone;
 
-    if (!done) {
-        done = opts;
-        opts = {};
-    }
-    var listRecordsParameters = assign({
-        limit: limit, offset: offset
-    }, opts);
-
-    this._base.runAction('get', '/' + this._urlEncodedNameOrId() + '/', listRecordsParameters, null, function(err, response, results) {
+    var method = isDestructiveUpdate ? "put" : "patch";
+    var requestData = assign({ records: recordsData }, opts);
+    this._base.runAction(
+      method,
+      "/" + this._urlEncodedNameOrId() + "/",
+      {},
+      requestData,
+      function (err, resp, body) {
         if (err) {
-            done(err);
-            return;
+          done(err);
+          return;
         }
 
-        var records = map(results.records, function(recordJson) {
-            return new Record(that, null, recordJson);
+        var result = body.records.map(function (record) {
+          return new Record(that, record.id, record);
         });
-        done(null, records, results.offset);
-    });
+        done(null, result);
+      }
+    );
+  } else {
+    var recordId = recordsDataOrRecordId;
+    var recordData = recordDataOrOptsOrDone;
+    opts = isPlainObject(optsOrDone) ? optsOrDone : {};
+    done = done || optsOrDone;
+
+    var record = new Record(this, recordId);
+    if (isDestructiveUpdate) {
+      record.putUpdate(recordData, opts, done);
+    } else {
+      record.patchUpdate(recordData, opts, done);
+    }
+  }
 };
 
-Table.prototype._forEachRecord = function(opts, callback, done) {
-    if (arguments.length === 2) {
-        done = callback;
-        callback = opts;
-        opts = {};
-    }
+Table.prototype._destroyRecord = function (recordIdsOrId, done) {
+  if (isArray(recordIdsOrId)) {
     var that = this;
-    var limit = Table.__recordsPerPageForIteration || 100;
-    var offset = null;
+    var queryParams = { records: recordIdsOrId };
+    this._base.runAction(
+      "delete",
+      "/" + this._urlEncodedNameOrId(),
+      queryParams,
+      null,
+      function (err, response, results) {
+        if (err) {
+          done(err);
+          return;
+        }
 
-    var nextPage = function() {
-        that._listRecords(limit, offset, opts, function(err, page, newOffset) {
-            if (err) { done(err); return; }
-
-            forEach(page, callback);
-
-            if (newOffset) {
-                offset = newOffset;
-                nextPage();
-            } else {
-                done();
-            }
+        var records = map(results.records, function (recordJson) {
+          return new Record(that, recordJson.id, null);
         });
-    };
-    nextPage();
+        done(null, records);
+      }
+    );
+  } else {
+    var record = new Record(this, recordIdsOrId);
+    record.destroy(done);
+  }
+};
+
+Table.prototype._listRecords = function (limit, offset, opts, done) {
+  var that = this;
+
+  if (!done) {
+    done = opts;
+    opts = {};
+  }
+  var listRecordsParameters = assign(
+    {
+      limit: limit,
+      offset: offset,
+    },
+    opts
+  );
+
+  this._base.runAction(
+    "get",
+    "/" + this._urlEncodedNameOrId() + "/",
+    listRecordsParameters,
+    null,
+    function (err, response, results) {
+      if (err) {
+        done(err);
+        return;
+      }
+
+      var records = map(results.records, function (recordJson) {
+        return new Record(that, null, recordJson);
+      });
+      done(null, records, results.offset);
+    }
+  );
+};
+
+Table.prototype._forEachRecord = function (opts, callback, done) {
+  if (arguments.length === 2) {
+    done = callback;
+    callback = opts;
+    opts = {};
+  }
+  var that = this;
+  var limit = Table.__recordsPerPageForIteration || 100;
+  var offset = null;
+
+  var nextPage = function () {
+    that._listRecords(limit, offset, opts, function (err, page, newOffset) {
+      if (err) {
+        done(err);
+        return;
+      }
+
+      forEach(page, callback);
+
+      if (newOffset) {
+        offset = newOffset;
+        nextPage();
+      } else {
+        done();
+      }
+    });
+  };
+  nextPage();
 };
 
 module.exports = Table;
 
 },{"./callback_to_promise":3,"./deprecate":4,"./query":9,"./record":10,"lodash/assign":159,"lodash/forEach":163,"lodash/isArray":169,"lodash/isPlainObject":179,"lodash/map":186}],13:[function(require,module,exports){
-'use strict';
+"use strict";
 
-var includes = require('lodash/includes');
-var isArray = require('lodash/isArray');
+var includes = require("lodash/includes");
+var isArray = require("lodash/isArray");
 
 function check(fn, error) {
-    return function(value) {
-        if (fn(value)) {
-            return {pass: true};
-        } else {
-            return {pass: false, error: error};
-        }
-    };
+  return function (value) {
+    if (fn(value)) {
+      return { pass: true };
+    } else {
+      return { pass: false, error: error };
+    }
+  };
 }
 
 check.isOneOf = function isOneOf(options) {
-    return includes.bind(this, options);
+  return includes.bind(this, options);
 };
 
-check.isArrayOf = function(itemValidator) {
-    return function(value) {
-        return isArray(value) && value.every(itemValidator);
-    };
+check.isArrayOf = function (itemValidator) {
+  return function (value) {
+    return isArray(value) && value.every(itemValidator);
+  };
 };
 
 module.exports = check;
@@ -6646,77 +6937,86 @@ function extend() {
 }
 
 },{}],"airtable":[function(require,module,exports){
-'use strict';
+"use strict";
 
-var Base = require('./base');
-var Record = require('./record');
-var Table = require('./table');
-var AirtableError = require('./airtable_error');
+var Base = require("./base");
+var Record = require("./record");
+var Table = require("./table");
+var AirtableError = require("./airtable_error");
 
 function Airtable(opts) {
-    opts = opts || {};
+  opts = opts || {};
 
-    var defaultConfig = Airtable.default_config();
+  var defaultConfig = Airtable.default_config();
 
-    var apiVersion = opts.apiVersion || Airtable.apiVersion || defaultConfig.apiVersion;
+  var apiVersion =
+    opts.apiVersion || Airtable.apiVersion || defaultConfig.apiVersion;
 
-    Object.defineProperties(this, {
-        _apiKey: {
-            value: opts.apiKey || Airtable.apiKey || defaultConfig.apiKey,
-        },
-        _endpointUrl: {
-            value: opts.endpointUrl || Airtable.endpointUrl || defaultConfig.endpointUrl,
-        },
-        _apiVersion: {
-            value: apiVersion,
-        },
-        _apiVersionMajor: {
-            value: apiVersion.split('.')[0],
-        },
-        _allowUnauthorizedSsl: {
-            value: opts.allowUnauthorizedSsl || Airtable.allowUnauthorizedSsl || defaultConfig.allowUnauthorizedSsl,
-        },
-        _noRetryIfRateLimited: {
-            value: opts.noRetryIfRateLimited || Airtable.noRetryIfRateLimited || defaultConfig.noRetryIfRateLimited,
-        },
-        _userTable: {
-            value: opts.userTable || Airtable.userTable
-        }
-    });
+  Object.defineProperties(this, {
+    _apiKey: {
+      value: opts.apiKey || Airtable.apiKey || defaultConfig.apiKey,
+    },
+    _endpointUrl: {
+      value:
+        opts.endpointUrl || Airtable.endpointUrl || defaultConfig.endpointUrl,
+    },
+    _apiVersion: {
+      value: apiVersion,
+    },
+    _apiVersionMajor: {
+      value: apiVersion.split(".")[0],
+    },
+    _allowUnauthorizedSsl: {
+      value:
+        opts.allowUnauthorizedSsl ||
+        Airtable.allowUnauthorizedSsl ||
+        defaultConfig.allowUnauthorizedSsl,
+    },
+    _noRetryIfRateLimited: {
+      value:
+        opts.noRetryIfRateLimited ||
+        Airtable.noRetryIfRateLimited ||
+        defaultConfig.noRetryIfRateLimited,
+    },
+    _userTable: {
+      value: opts.userTable || Airtable.userTable,
+    },
+  });
 
-    this.requestTimeout = opts.requestTimeout || defaultConfig.requestTimeout;
+  this.requestTimeout = opts.requestTimeout || defaultConfig.requestTimeout;
 
-    if (!this._apiKey) {
-        throw new Error('An API key is required to connect to Airtable');
-    }
+  if (!this._apiKey) {
+    throw new Error("An API key is required to connect to Airtable");
+  }
 }
 
-Airtable.prototype.base = function(baseId) {
-    return Base.createFunctor(this, baseId);
+Airtable.prototype.base = function (baseId) {
+  return Base.createFunctor(this, baseId);
 };
 
-Airtable.default_config = function() {
-    return {
-        endpointUrl: undefined || 'https://api.airtable.com',
-        apiVersion: '0.1.0',
-        apiKey: undefined,
-        allowUnauthorizedSsl: false,
-        noRetryIfRateLimited: false,
-        requestTimeout: 300 * 1000, // 5 minutes
-    };
+Airtable.default_config = function () {
+  return {
+    endpointUrl:
+      undefined || "https://api.airtable.com",
+    apiVersion: "0.1.0",
+    apiKey: undefined,
+    allowUnauthorizedSsl: false,
+    noRetryIfRateLimited: false,
+    requestTimeout: 300 * 1000, // 5 minutes
+  };
 };
 
-Airtable.configure = function(opts) {
-    Airtable.apiKey = opts.apiKey;
-    Airtable.endpointUrl = opts.endpointUrl;
-    Airtable.apiVersion = opts.apiVersion;
-    Airtable.allowUnauthorizedSsl = opts.allowUnauthorizedSsl;
-    Airtable.noRetryIfRateLimited = opts.noRetryIfRateLimited;
-    Airtable.userTable = opts.userTable;
+Airtable.configure = function (opts) {
+  Airtable.apiKey = opts.apiKey;
+  Airtable.endpointUrl = opts.endpointUrl;
+  Airtable.apiVersion = opts.apiVersion;
+  Airtable.allowUnauthorizedSsl = opts.allowUnauthorizedSsl;
+  Airtable.noRetryIfRateLimited = opts.noRetryIfRateLimited;
+  Airtable.userTable = opts.userTable;
 };
 
-Airtable.base = function(baseId) {
-    return new Airtable().base(baseId);
+Airtable.base = function (baseId) {
+  return new Airtable().base(baseId);
 };
 
 Airtable.Base = Base;
