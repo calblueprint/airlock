@@ -52,6 +52,8 @@ export default (
       domain: req.hostname,
       path: '/',
       expires: new Date(Date.now() + ms(expirationDuration)),
+      secure: true,
+      sameSite: 'none',
     });
     res.json({
       success: true,
