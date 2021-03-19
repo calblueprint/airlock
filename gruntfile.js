@@ -1,29 +1,33 @@
-'use strict';
+"use strict";
 
-module.exports = function(grunt) {
-    var pkg = grunt.file.readJSON('package.json');
+module.exports = function (grunt) {
+  var pkg = grunt.file.readJSON("package.json");
 
-    // Project configuration.
-    grunt.initConfig({
-        pkg: pkg,
-        browserify: {
-            client: {
-                src: './lib/airtable.js',
-                dest: './build/airtable.browser.js',
-                options: {
-                    transform: [
-                        ['envify', {
-                            _: 'purge',
-                            npm_package_version: pkg.version,
-                        }]
-                    ],
-                    preBundleCB: function(b) {
-                        b.require('./lib/airtable.js', {expose: 'airtable'});
-                    }
-                }
-            }
+  // Project configuration.
+  grunt.initConfig({
+    pkg: pkg,
+    browserify: {
+      client: {
+        src: "./lib/airtable.js",
+        dest: "./build/airtable.browser.js",
+        options: {
+          external: ["react-native"],
+          transform: [
+            [
+              "envify",
+              {
+                _: "purge",
+                npm_package_version: pkg.version,
+              },
+            ],
+          ],
+          preBundleCB: function (b) {
+            b.require("./lib/airtable.js", { expose: "airtable" });
+          },
         },
-    });
+      },
+    },
+  });
 
-    grunt.loadNpmTasks('grunt-browserify');
+  grunt.loadNpmTasks("grunt-browserify");
 };

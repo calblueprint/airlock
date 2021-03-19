@@ -1,12 +1,135 @@
 'use strict';
-
 var request = require('request');
 var version = require('../package.json').version;
 var Airtable = require('../lib/airtable');
 
-jest.mock('request');
+jest.mock('request', () => jest.fn((options, cb) => {
+    cb(null, {
+        body: {
+            success: options.body && options.body.success,
+            user: {
+                username: options.body && options.body.username,
+            },
+            token: 'tokXyz',
+        } 
+    });
+}));
 
 describe('Base', function() {
+    afterEach(function() {
+        localStorage.clear();
+        jest.clearAllMocks();
+    });
+    ['login', 'register'].forEach((authFunction) => {
+        describe(`#${authFunction}`, function() {
+            it('disallows requests to the official API endpoint', async function() {
+                let fakeAirtable = new Airtable({
+                    apiKey: 'keyXyz'
+                });
+                const base = fakeAirtable.base('app123');
+                expect.assertions(2);
+                expect(fakeAirtable._endpointUrl).toBe('https://api.airtable.com');
+    
+                try {
+                    await base[authFunction]({
+                        username: 'user',
+                        password: 'password'
+                    });
+                } catch (err) {
+                    expect(err.message).toMatch(`Base#${authFunction} cannot be used with api.airtable.com.`
+                    + ' Please configure this Airlock client to use an Airlock endpoint URL.');
+                }
+            });
+
+            // Correctly configured Airlock client
+            const airtable = new Airtable({
+                apiKey: 'airlock',
+                endpointUrl: 'test',
+                requestTimeout: 1234
+            });
+            let base = airtable.base('app123');
+
+            it('requires username and password', async function() {
+                expect.assertions(2);
+                try {
+                    await base[authFunction]({
+                        password: 'password'
+                    });
+                } catch (err) {
+                    expect(err.message).toMatch(`Missing parameter 'username' required for Base#${authFunction}`);
+                }
+
+                try {
+                    await base[authFunction]({
+                        username: 'user'
+                    });
+                } catch (err) {
+                    expect(err.message).toMatch(`Missing parameter 'password' required for Base#${authFunction}`);
+                }
+            });
+            it('makes authentication requests with the right options', async function() {
+                base = airtable.base('app123');
+
+                base[authFunction]({
+                    username: 'user',
+                    password: 'password'
+                });
+                expect(request).toHaveBeenCalledTimes(1);
+                expect(request).toHaveBeenCalledWith({
+                    method: 'POST',
+                    url: `test/v0/app123/__DANGEROUSLY__USE__TABLE__TO__LET__USERS__${authFunction.toUpperCase()}?`,
+                    json: true,
+                    headers: {
+                        authorization: 'Bearer airlock',
+                        'x-api-version': '0.1.0',
+                        'x-airtable-application-id': 'app123',
+                        'x-airtable-user-agent': 'Airtable.js/' + version
+                    },
+                    agentOptions: {
+                        rejectUnauthorized: false
+                    },
+                    body: {
+                        username: 'user',
+                        password: 'password'
+                    },
+                    timeout: 1234
+                }, expect.any(Function));
+            });
+            it('stores the resulting user and token within the Airtable client', function() {
+                expect.assertions(3);
+                return base[authFunction]({
+                    username: 'user',
+                    password: 'password'
+                }).then(() => {
+                    expect(base.getUser()).not.toBe(null);
+                    expect(base.getUsername()).toBe('user');
+                    expect(base.getToken()).toBe('tokXyz');
+                });
+            });
+        });
+    });
+
+    describe('#logout', function() {
+        const airtable = new Airtable({
+            apiKey: 'airlock',
+            endpointUrl: 'test',
+            requestTimeout: 1234
+        });
+        let base = airtable.base('app123');
+        base.login({
+            username: 'user',
+            password: 'password'
+        });
+        it('properly logs out a user by deleting user properties in localStorage', function() {
+            expect.assertions(3);
+            return base.logout().then(() => {
+                expect(base.getUser()).toBe(null);
+                expect(base.getUsername()).not.toBe('user');
+                expect(base.getToken()).not.toBe('tokXyz');
+            });
+        });
+    });
+
     describe('#runAction', function() {
         it('makes requests with the right options', function() {
             var fakeAirtable = new Airtable({
@@ -27,7 +150,7 @@ describe('Base', function() {
                     authorization: 'Bearer keyXyz',
                     'x-api-version': '0.1.0',
                     'x-airtable-application-id': 'app123',
-                    'User-Agent': 'Airtable.js/' + version
+                    'x-airtable-user-agent': 'Airtable.js/' + version
                 },
                 agentOptions: {
                     rejectUnauthorized: false
