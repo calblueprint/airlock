@@ -11,6 +11,9 @@ export const restrictColumns = (
     if (typeof result === 'object') {
       record = result;
     }
+    if (!result) {
+      return false;
+    }
     return {
       ...record,
       fields: fromEntries(
