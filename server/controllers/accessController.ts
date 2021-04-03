@@ -47,9 +47,7 @@ export default (
     if (!('records' in payload)) {
       payload = { records: [payload] };
     }
-    const filteredAndTransformedRecords: (Record<
-      any
-    > | null)[] = await Promise.all(
+    const filteredAndTransformedRecords: (Record<any> | null)[] = await Promise.all(
       payload.records.map((record: Record<any>) => {
         return new Promise<Record<any> | null>((resolve) => {
           let accessResolverResult = accessResolver(record, authenticatedUser);
@@ -98,10 +96,7 @@ export default (
     payload = {
       records: filteredAndTransformedRecords.filter(
         (record: Record<any> | null) =>
-          record !== null &&
-          typeof record === 'object' &&
-          record.id &&
-          record.fields,
+          record !== null && typeof record === 'object' && record.fields,
       ),
     };
 
