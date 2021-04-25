@@ -9,6 +9,7 @@ import util from 'util';
 
 import { AuthorizationError, InputError } from '../lib/errors';
 import { AirlockController, AirlockOptions } from '../main';
+import tokenManagement from '../utils/tokenManagement';
 import { fetchRecordsByIds, requestOptions, routes } from '../utils/airtable';
 import logger from '../utils/logger';
 
@@ -22,6 +23,7 @@ export default (
   register: {};
   checkForExistingUser: {};
   verifyToken: {};
+  checkTokenRevocation: {};
 }> => {
   const {
     airtableBaseId,
@@ -143,12 +145,43 @@ export default (
       }
       sendToken(req, res, token);
     },
-
-    async logout(_req, res) {
-      res.cookie('airlock_token', '', { expires: new Date(Date.now()) });
-      res.json({ success: true });
+    async logout(req, res) {
+      let token =
+        (req.headers.token as string) || (req.cookies.airlock_token as string);
+      logger.debug(`Token value is: ${token}`);
+      if (token) {
+        let value = await tokenManagement.isTokenRevoked(token);
+        if (value != null) {
+          return res.json({
+            success: false,
+            message: 'User has already been logged out',
+          });
+        } else {
+          const revocationDate = new Date();
+          let status = await tokenManagement.revokeToken(
+            token,
+            revocationDate.toString(),
+          );
+          if (status == 'OK') {
+            res.cookie('airlock_token', '', { expires: new Date(Date.now()) });
+            return res.json({
+              success: true,
+              message: 'User successfully logged out',
+            });
+          } else {
+            return res.json({
+              success: false,
+              message: 'User unsuccessfully logged out',
+            });
+          }
+        }
+      } else {
+        return res.json({
+          success: false,
+          message: 'Authorization token not supplied',
+        });
+      }
     },
-
     async checkForExistingUser(req, _res, next) {
       if (!req.body || !req.body.username) {
         return next();
@@ -210,6 +243,23 @@ export default (
         });
       } else {
         return next(new InputError('No token supplied'));
+      }
+    },
+    async checkTokenRevocation(req, res, next) {
+      let token =
+        (req.headers.token as string) || (req.cookies.airlock_token as string);
+      if (token) {
+        let value = await tokenManagement.isTokenRevoked(token);
+        if (value != null) {
+          return res.json({
+            success: false,
+            message: 'Token has been revoked',
+          });
+        } else {
+          return next();
+        }
+      } else {
+        return next(new InputError('Authorization token is not supplied'));
       }
     },
   };

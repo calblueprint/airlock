@@ -237,13 +237,21 @@ class Airlock {
       authController.login,
     );
 
-    app.post('/:version/:baseId/__airlock_logout__', authController.logout);
+    app.post(
+      '/:version/:baseId/__airlock_logout__',
+      cookieParser(),
+      bodyParser.json(),
+      authController.verifyToken,
+      authController.checkTokenRevocation,
+      authController.logout,
+    );
 
     app.all(
       '/:version/:baseId/:tableName/:recordId?',
       cookieParser(),
       bodyParser.json(),
       authController.verifyToken,
+      authController.checkTokenRevocation,
       proxyController.hydrateRecordIds,
       accessController.filterRequest,
       proxyController.flattenRecordsToIds,
