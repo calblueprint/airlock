@@ -129,6 +129,7 @@ class Airlock {
       this.createServer();
     } else {
       this.server = server;
+      this.options.port = null;
     }
     this.mountAirlock();
   }
@@ -276,7 +277,17 @@ class Airlock {
         return res.status(500).send({ error: err });
       },
     );
-    logger.info(`🚀 Airlock mounted and running on port ${this.options.port}`);
+
+    if (this.options.port) {
+      logger.info(
+        `🚀 Airlock mounted and running on port ${this.options.port}`,
+      );
+    } else {
+      logger.info(
+        '🚀 Airlock mounted and running on your specified Express server',
+      );
+    }
+
     if (this.options.allowedOrigins.length === 0) {
       logger.warn(
         `No allowedOrigins specified. Defaulting to permit all cross-origin requests.`,
