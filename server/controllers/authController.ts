@@ -14,6 +14,30 @@ import logger from '../utils/logger';
 
 const request = util.promisify(_request);
 
+export function signToken(
+  userId: string,
+  privateKey: string,
+  expiresIn: string,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    jwt.sign(
+      { id: userId },
+      privateKey,
+      {
+        algorithm: 'RS256',
+        expiresIn,
+        subject: userId,
+      },
+      (error, token) => {
+        if (error) {
+          return reject(error);
+        }
+        resolve(token);
+      },
+    );
+  });
+}
+
 export default (
   opts: AirlockOptions,
 ): AirlockController<{
@@ -34,17 +58,6 @@ export default (
     publicKey,
     privateKey,
   } = opts;
-
-  function createToken(payload: Record<any>) {
-    return jwt.sign(
-      { ...payload, [airtablePasswordColumn]: undefined },
-      privateKey,
-      {
-        algorithm: 'RS256',
-        expiresIn: expirationDuration,
-      },
-    );
-  }
 
   function sendToken(req: Request, res: Response, token: string): void {
     res.cookie('airlock_token', token, {
@@ -84,7 +97,7 @@ export default (
 
       let token: string;
       try {
-        token = createToken(req.user);
+        token = await signToken(req.user.id, privateKey, expirationDuration);
       } catch (err) {
         return next(err);
       }
@@ -137,7 +150,7 @@ export default (
 
       let token: string;
       try {
-        token = createToken(req.user);
+        token = await signToken(req.user.id, privateKey, expirationDuration);
       } catch (err) {
         return next(err);
       }
