@@ -277,10 +277,18 @@ class Airlock {
         _next: express.NextFunction,
       ) => {
         if (err instanceof InputError) {
-          return res.status(400).send({ success: false, error: err });
+          return res
+            .status(400)
+            .send({
+              success: false,
+              error: `MalformedRequestError: ${err.message}`,
+            });
         }
         if (err instanceof AuthorizationError) {
-          return res.status(401).send({ success: false, error: err });
+          return res.status(401).send({
+            success: false,
+            error: `AuthorizationError: ${err.message}`,
+          });
         }
 
         // Unexpected errors
