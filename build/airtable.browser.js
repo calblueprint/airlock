@@ -30,7 +30,7 @@ var runAction = require("./run_action");
 var callbackToPromise = require("./callback_to_promise");
 
 const isReactNative =
-  typeof document != "undefined" &&
+  typeof document === "undefined" &&
   typeof navigator != "undefined" &&
   navigator.product == "ReactNative";
 
@@ -274,7 +274,7 @@ Base.prototype.getId = function () {
 
 Base.prototype.getUser = function () {
   if (this._user) {
-    return this._user;
+    return Promise.resolve(this._user);
   }
   return this._getLocalStorage("airlock_user");
 };

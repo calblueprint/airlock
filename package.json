@@ -6,6 +6,7 @@
   "repository": "git://github.com/airtable/airtable.js.git",
   "private": false,
   "scripts": {
+    "build": "grunt browserify",
     "pretest": "npm run lint",
     "lint": "eslint .",
     "test": "jest --env jsdom"

@@ -8,6 +8,7 @@ import express from 'express';
 import { ParamsDictionary } from 'express-serve-static-core';
 import http from 'http';
 import path from 'path';
+import { XOR } from 'ts-xor';
 
 import AccessController from './controllers/accessController';
 import AuthController from './controllers/authController';
@@ -24,9 +25,7 @@ export type AirlockAccessResolver = (
   | Airtable.Record<object>
   | Promise<boolean | Airtable.Record<object>>;
 
-export type AirlockInitOptions = {
-  server?: express.Application;
-  port?: number;
+type BaseInitOptions = {
   allowedOrigins?: string[];
   configDir?: string;
   resolversDir?: string;
@@ -46,6 +45,20 @@ export type AirlockInitOptions = {
   airtablePasswordColumn: string;
 };
 
+type InitOptionsWithoutServer = {
+  port: number;
+};
+
+type InitOptionsWithServer = {
+  server: express.Application;
+};
+
+export type AirlockInitOptions = XOR<
+  InitOptionsWithoutServer,
+  InitOptionsWithServer
+> &
+  BaseInitOptions;
+
 export type AirlockOptions = Required<
   Omit<AirlockInitOptions, 'server' | 'airtableApiKey'>
 > & {
@@ -54,6 +67,10 @@ export type AirlockOptions = Required<
   publicKey: string;
   privateKey: string;
   accessResolvers: Record<string, AirlockAccessResolver>;
+  /**
+   * A `null` value for `port` means that a custom Express server was specified on initialization.
+   */
+  port: number | null;
 };
 
 export type AirlockController<
@@ -74,7 +91,7 @@ class Airlock {
   > = validators;
 
   constructor(opts: AirlockInitOptions) {
-    let { server, airtableApiKey, ...options } = opts;
+    let { airtableApiKey, ...options } = opts;
     if (!Array.isArray(airtableApiKey)) {
       airtableApiKey = [airtableApiKey];
     }
@@ -125,10 +142,11 @@ class Airlock {
     }
 
     this.options = { ...this.options, ...this.readConfigFiles() };
-    if (!server) {
-      this.createServer();
+    if ('server' in opts) {
+      this.server = opts.server;
+      this.options.port = null;
     } else {
-      this.server = server;
+      this.createServer();
     }
     this.mountAirlock();
   }
@@ -276,7 +294,17 @@ class Airlock {
         return res.status(500).send({ error: err });
       },
     );
-    logger.info(`🚀 Airlock mounted and running on port ${this.options.port}`);
+
+    if (this.options.port) {
+      logger.info(
+        `🚀 Airlock mounted and running on port ${this.options.port}`,
+      );
+    } else {
+      logger.info(
+        '🚀 Airlock mounted and running on your specified Express server',
+      );
+    }
+
     if (this.options.allowedOrigins.length === 0) {
       logger.warn(
         `No allowedOrigins specified. Defaulting to permit all cross-origin requests.`,
