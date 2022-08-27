@@ -31,8 +31,8 @@ var callbackToPromise = require("./callback_to_promise");
 
 const isReactNative =
   typeof document === "undefined" &&
-  typeof navigator != "undefined" &&
-  navigator.product == "ReactNative";
+  typeof navigator !== "undefined" &&
+  navigator.product === "ReactNative";
 
 function Base(airtable, baseId) {
   this._airtable = airtable;
@@ -170,7 +170,7 @@ Base.prototype.register = function ({ username, password, fields }, done) {
         .then(() => {
           done(err, data);
         })
-        .catch((err) => done(err));
+        .catch((error) => done(error));
     }
   );
 };
@@ -213,7 +213,7 @@ Base.prototype.login = function ({ username, password }, done) {
         .then(() => {
           done(err, data);
         })
-        .catch((err) => done(err));
+        .catch((error) => done(error));
     }
   );
 };
@@ -236,7 +236,7 @@ Base.prototype.logout = function (done) {
       .then(() => {
         done(err, data);
       })
-      .catch((err) => done(err));
+      .catch((error) => done(error));
   });
 };
 
